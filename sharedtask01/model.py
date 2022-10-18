@@ -1,22 +1,13 @@
-import operator
 from imblearn.over_sampling import SMOTE
 import pandas as pd
-import wandb as wandb
 from keras.utils import to_categorical
-from wandb.keras import WandbCallback
 pd.set_option('display.max_rows', None)
 from keras.losses import CategoricalCrossentropy
 from sklearn.metrics import precision_score, recall_score, f1_score
 import wandb
-
 from wandb.integration.keras import WandbCallback
-
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
-import tensorflow_addons as tfa
-import keras
-from tensorflow import keras
 from keras.models import Model
 from keras.metrics import Precision, Recall
 from keras.layers import Dense, Input, Flatten, Dropout, Embedding
@@ -98,9 +89,9 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     neuron_list = [neurons]
     free_weights = free_weights - neurons * neuron_list[-1]
 
-    while (free_weights > 0):
+    while free_weights > 0:
         neurons = int(neurons * neurons_rate_change)
-        if (free_weights - (neurons * neuron_list[-1]) > 0):
+        if free_weights - (neurons * neuron_list[-1]) > 0:
             free_weights = free_weights - neurons * neuron_list[-1]
             neuron_list.append(neurons)
         else:
