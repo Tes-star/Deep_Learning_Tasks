@@ -3,7 +3,7 @@ from imblearn.over_sampling import SMOTE
 import pandas as pd
 import wandb as wandb
 from keras.utils import to_categorical
-
+from wandb.keras import WandbCallback
 pd.set_option('display.max_rows', None)
 from keras.losses import CategoricalCrossentropy
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -23,7 +23,7 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding
 
 
 def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
-                neurons_0=64,
+                neurons=64,
                 neurons_1=64,
                 neurons_2=64
                 ):
@@ -33,9 +33,8 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     config = wandb.config
     # set configs
     optim = tf.keras.optimizers.Adam(config.learning_rate)
-    neurons_0 = config.neurons_0
-    neurons_1 = config.neurons_1
-    neurons_2 = config.neurons_2
+    neurons = config.neurons
+
 
     loss = CategoricalCrossentropy()  # to avoid errors
     match config.loss:
@@ -91,16 +90,21 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     inputs = tf.keras.Input(shape=(X_train.shape[-1],))
 
     # create hidden layers
-    neuron_list = [int(neurons_0), int(neurons_0), int(neurons_0),
-                   int(neurons_1), int(neurons_1), int(neurons_1),
-                   int(neurons_2), int(neurons_2), int(neurons_2),int(neurons_2)]
-    # reduce neurons_x to layers of neurons
-    layers = int(config.layers)
-    dropout_rate = config.dropout_rate
-    layers=1
+    #neurons_0 = 500
+    num_weights = config.num_weights
+    free_weights = num_weights
+    neurons_rate_change = config.neurons_rate_change
+    dropout_rate=config.dropout_rate
+    neuron_list = [neurons]
+    free_weights = free_weights - neurons * neuron_list[-1]
 
-    for i in range(10 - layers):
-        neuron_list.pop()
+    while (free_weights > 0):
+        neurons = int(neurons * neurons_rate_change)
+        if (free_weights - (neurons * neuron_list[-1]) > 0):
+            free_weights = free_weights - neurons * neuron_list[-1]
+            neuron_list.append(neurons)
+        else:
+            break
 
     neuron_list.sort(reverse=True)
     # create hidden layers dynamic
@@ -108,13 +112,13 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     d['hl0'] = Dense(neuron_list[0], activation='relu')(inputs)
     d['hl1'] = Dropout(rate=dropout_rate)(d['hl0'])
 
-    for i in range(layers - 1):
-        dropout_rate = dropout_rate * config.dropout_rate_change
+    for i in range(len(neuron_list) - 1):
+        dropout_rate = min[dropout_rate* config.dropout_rate_change,0.5]
         d["hl{0}".format(i * 2 + 2)] = Dense(neuron_list[1 + i], activation='relu')(d["hl{0}".format(i * 2 + 1)])
         d["hl{0}".format(i * 2 + 3)] = Dropout(rate=dropout_rate)(d["hl{0}".format(i * 2 + 2)])
 
     # create output neurons
-    output = Dense(10, activation='softmax')(d["hl{0}".format(layers * 2 - 1)])
+    output = Dense(10, activation='softmax')(d["hl{0}".format(len(neuron_list) * 2 - 1)])
 
     # define model
 
@@ -154,14 +158,28 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     from keras.callbacks import EarlyStopping
 
     early_stopping = EarlyStopping(
-        monitor='val_loss',
-        min_delta=0.0001,  # minimium amount of change to count as an improvement
-        patience=20,  # how many epochs to wait before stopping
+        monitor='val_accuracy',
+        min_delta=0.001,  # minimium amount of change to count as an improvement
+        patience=10,  # how many epochs to wait before stopping
         restore_best_weights=True,
     )
+    early_stopping_baseline1 = EarlyStopping(
+        monitor='val_accuracy',
+        min_delta=0.001,  # minimium amount of change to count as an improvement
+        patience=50,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline= 0.65
+    )
+    early_stopping_baseline2 = EarlyStopping(
+        monitor='val_accuracy',
+        min_delta=0.001,  # minimium amount of change to count as an improvement
+        patience=100,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline= 0.7
+    )
 
-    model.fit(X_train, y_train_oh, epochs=10, batch_size=config.batch_size, verbose=1
-              , callbacks=[early_stopping]
+    model.fit(X_train, y_train_oh, epochs=1000, batch_size=config.batch_size, verbose=1
+              , callbacks=[early_stopping,early_stopping_baseline1,early_stopping_baseline2,WandbCallback()]
               , validation_data=(X_val, y_val_oh)
               )
     print('Training ended successful')
@@ -184,9 +202,9 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
 
     # plot confusion matrix
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=y_labels)
-    disp.plot()
-    plt.show()
-    print('ConfusionMatrixDisplay ended successful')
+    #disp.plot()
+    #plt.show()
+    #print('ConfusionMatrixDisplay ended successful')
 
     y_test = y_val
     labels_train = np.unique(np.concatenate((y_train, pred_y_train)))
@@ -203,8 +221,8 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
     f1_test = f1_score(y_test, pred_y_test, labels=labels_test, average='micro')
     print('Testscore ended successful')
     #labels_test_str = operator.itemgetter(*labels_test)(labels_train)
-    wandb.log(
-        {"conf_mat": wandb.plot.confusion_matrix(probs=None, y_true=y_test, preds=pred_y_test)})
+    #wandb.log(
+    #    {"conf_mat": wandb.plot.confusion_matrix(probs=None, y_true=y_test, preds=pred_y_test)})
 
     wandb.log({'precision_train': precision_train})
     wandb.log({'precision_test': precision_test})
@@ -226,8 +244,10 @@ if __name__ == '__main__':
     #wandb.login()
 
     # define sweep_id
-    sweep_id = 'crs415m4'
+    sweep_id = 'ftnr4fnj'
     # wandb sweep sweep.yaml
 
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Deep_Learning", entity="deep_learning_hsa")
+
+
