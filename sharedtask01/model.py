@@ -76,7 +76,7 @@ def train_model(learning_rate=0.001, batch_size=64000, dropout_rate=0.05,
             scaler = MinMaxScaler()
 
     X_train = scaler.fit_transform(X_train)
-    X_val = scaler.transform(X_val)
+    X_val = scaler.fit_transform(X_val)
 
     inputs = tf.keras.Input(shape=(X_train.shape[-1],))
 

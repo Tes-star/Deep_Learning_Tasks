@@ -1,5 +1,5 @@
 # Shared Task #1 - Vehicle Type Classification
-![car_showroom.png](car_showroom.png)
+![car_showroom.jpg](car_showroom.jpg)
 
 Es soll ein Neuronales Netz zur Klassifikation von Fahrzeugen in 9 Fahrzeugklassen entwickelt werden. Für diese Aufgabe
 steht ein Datensatz zur Verfügung, welcher für jedes der 49502 Fahrzeuge 60 quantitative Attribute enthält.
