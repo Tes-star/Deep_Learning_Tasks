@@ -271,9 +271,9 @@ def train_model():
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=5, batch_size=config.batch_size, verbose=1,
+        model.fit(x_train, y_train, epochs=20, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
-                  callbacks=[early_stopping, early_stopping_baseline1,early_stopping_baseline2, WandbCallback()]
+                  callbacks=[early_stopping,  WandbCallback()] #early_stopping_baseline1,early_stopping_baseline2,
                   )
         evaluate_model(model, x_test, y_test, scaler)
 
