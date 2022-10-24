@@ -1,47 +1,42 @@
 from imblearn.over_sampling import SMOTE
 import pandas as pd
 from keras import Sequential
+from keras.activations import sigmoid, tanh, elu, selu
+from keras.initializers.initializers_v2 import GlorotNormal, HeNormal
 from keras.utils import to_categorical
 from sklearn import model_selection
 from keras.callbacks import EarlyStopping
 from keras.losses import CategoricalCrossentropy
 from sklearn.metrics import precision_score, recall_score, f1_score, mean_squared_error
+from tensorflow.python.ops.init_ops import lecun_normal
+
 import wandb
 from wandb.integration.keras import WandbCallback
 import numpy as np
 import tensorflow as tf
 from keras.models import Model
 from keras.metrics import Precision, Recall
-from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidirectional
+from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidirectional, TimeDistributed, RepeatVector
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
-sweep_configuration = {
-    'method': 'random',
-    'name': 'sweep',
-    'metric': {'goal': 'maximize', 'name': 'val_acc'},
-    'parameters':
-        {
-            'batch_size': {'values': [16, 32, 64]},
-            'epochs': {'values': [5, 10, 15]},
-            'lr': {'max': 0.1, 'min': 0.0001}
-        }
-}
+
 sweep_configuration = {
     'method': 'bayes',
     'metric': {'goal': 'minimize', 'name': 'mean_squared_error'},
     'parameters': {
         'batch_size': {
             'values':
-                [128, 512, 1000, 10000]},
+                [1000, 5000]
+        },
         'dropout_rate': {
             'values':
                 [0.2, 0.3, 0.4, 0.5]
         },
-        'dropout_rate_change': {
-            'values':
-                [0.9, 1, 1.1]
-        },
+        # 'dropout_rate_change': {
+        #     'values':
+        #         [0.9, 1, 1.1]
+        # },
         'learning_rate': {
             'values':
                 [0.01, 0.001, 0.0001]
@@ -51,23 +46,37 @@ sweep_configuration = {
                 ['CategoricalCrossentropy']
         },
 
-        'neurons': {'max': 2000, 'min': 200}
-        ,
-        'neurons_rate_change': {
-            'values':
-                [0.5, 0.75, 0.9, 1]
-        },
-        'num_weights': {
-            'values':
-                [200000, 400000, 800000]
-        },
+        #'neurons': {'max': 2000, 'min': 200},
+        'lstm_units': {'max': 20, 'min': 5},
+        'LSTM_size': {'max': 50, 'min': 10},
+
+        # 'neurons_rate_change': {
+        #     'values':
+        #         [0.5, 0.75, 0.9, 1]
+        # },
+        #'num_weights': {
+        #    'values':
+        #        [200000, 400000, 800000]
+        #},
         'optimizer': {
             'values':
                 ['Adam', 'RMSprop', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad']
         },
+        'activation_lstm_loop': {
+            'values':
+                ['elu', 'tanh', 'sigmoid']
+        },
+        'activation_lstm_classifier': {
+            'values':
+                ['elu', 'tanh', 'sigmoid']
+        },
         'scaler': {
             'values':
                 ['StandardScaler', 'MinMaxScaler']
+        },
+        'lstm_Bidirectional': {
+            'values':
+                ['TRUE', 'FALSE']
         }
     },
     'program': 'model.py'
@@ -97,18 +106,24 @@ def create_traindataset(train):
     return x, y
 
 
-def load_model(x_train, lstm_units, dropout_rate):
+def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional, activation_lstm_loop,
+               activation_lstm_classifier,activation_lstm_classifier_init,activation_lstm_loop_init):
+    # RepeatVector(len_input),
+    # TimeDistributed(Dense(hidden_size, activation = elu)),
+
     model = Sequential()
-    model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1))))
+    model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                                 activation=activation_lstm_loop,kernel_initializer=activation_lstm_loop_init)))
     model.add(Dropout(dropout_rate))
-    model.add(LSTM(units=lstm_units, return_sequences=True))
-    model.add(Dropout(dropout_rate))
-    model.add(LSTM(units=lstm_units, return_sequences=True))
-    model.add(Dropout(dropout_rate))
+    for i in range(lstm_size):
+        if lstm_Bidirectional == 'True':
+            model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,kernel_initializer=activation_lstm_loop_init)))
+        else:
+            model.add(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop))
+        model.add(Dropout(dropout_rate))
     model.add(LSTM(units=lstm_units))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(units=7, activation='linear'))
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['acc', 'mean_squared_error'])
+    model.add(Dense(units=7, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init))
     # model.build(x_train.shape[1], 1)
     # model.summary()
     return model
@@ -142,8 +157,8 @@ def train_model():
         config = wandb.config
 
         # set configs
-        optim = tf.keras.optimizers.Adam(config.learning_rate)
-        neurons = config.neurons
+
+        #neurons = config.neurons
 
         # optimizer
         match config.optimizer:
@@ -164,18 +179,39 @@ def train_model():
             case 'Ftrl':
                 optimizer = tf.keras.optimizers.Ftrl(learning_rate=config.learning_rate)
 
-        loss = CategoricalCrossentropy()  # to avoid errors
-        match config.loss:
-            case 'CategoricalCrossentropy':
-                loss = CategoricalCrossentropy()
-        dropout_rate = config.dropout_rate
-
         # Scale Data
         match config.scaler:
             case 'StandardScaler':
                 scaler = StandardScaler()
             case 'MinMaxScaler':
                 scaler = MinMaxScaler()
+
+        match config.activation_lstm_loop:
+            case 'selu':
+                activation_lstm_classifier = selu
+                activation_lstm_classifier_init = lecun_normal
+            case 'elu':
+                activation_lstm_loop = elu
+                activation_lstm_loop_init = GlorotNormal
+            case 'tanh':
+                activation_lstm_loop = tanh
+                activation_lstm_loop_init=lecun_normal
+            case 'sigmoid':
+                activation_lstm_loop = sigmoid
+                activation_lstm_loop_init = GlorotNormal
+
+        match config.activation_lstm_classifier:
+            case 'selu':
+                activation_lstm_classifier = selu
+                activation_lstm_classifier_init=lecun_normal
+            case 'elu':
+                activation_lstm_classifier = elu
+                activation_lstm_classifier_init = GlorotNormal
+            case 'sigmoid':
+                activation_lstm_classifier = sigmoid
+                activation_lstm_classifier_init= GlorotNormal
+
+
         scaler.fit_transform(x.reshape(-1, 1))
 
         y = scaler.transform(y.reshape(-1, 1))
@@ -191,9 +227,6 @@ def train_model():
         x_test = x[val_]
         y_test = y[val_]
 
-        lstm_units = 5
-
-        model = load_model(x_train, lstm_units, dropout_rate)
 
         early_stopping = EarlyStopping(
             monitor='val_accuracy',
@@ -215,17 +248,28 @@ def train_model():
             restore_best_weights=True,
             baseline=0.7
         )
-        #print(x_train.shape)
-        #print(y_train.shape)
-        #print(x_test.shape)
-        #print(y_test.shape)
+        # print(x_train.shape)
+        # print(y_train.shape)
+        # print(x_test.shape)
+        # print(y_test.shape)
+        model = load_model(x_train=x_train, lstm_units=config.lstm_units, lstm_size=config.LSTM_size,
+                           dropout_rate=config.dropout_rate,
+                           lstm_Bidirectional=config.lstm_Bidirectional,
+                           activation_lstm_loop=activation_lstm_loop,
+                           activation_lstm_classifier=activation_lstm_classifier,
+                           activation_lstm_loop_init=activation_lstm_loop_init,
+                           activation_lstm_classifier_init=activation_lstm_classifier_init)
 
-        model.fit(x_train, y_train, epochs=1, batch_size=config.batch_size, verbose=1,
-                  # validation_data=(x_test, y_test),
+        model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['acc', 'mean_squared_error'])
+
+        model.fit(x_train, y_train, epochs=100, batch_size=config.batch_size, verbose=1,
+                  validation_data=(x_test, y_test),
                   callbacks=[WandbCallback()]
                   )
         evaluate_model(model, x_test, y_test, scaler)
+
         print("Finshed Job")
+        model.summary()
         wandb.finish()
 
         # callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
