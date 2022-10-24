@@ -210,6 +210,9 @@ def train_model():
             case 'sigmoid':
                 activation_lstm_classifier = sigmoid
                 activation_lstm_classifier_init= GlorotNormal
+            case 'tanh':
+                activation_lstm_classifier = tanh
+                activation_lstm_classifier_init= lecun_normal
 
 
         scaler.fit_transform(x.reshape(-1, 1))
