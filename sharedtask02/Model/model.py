@@ -38,7 +38,7 @@ sweep_configuration = {
         # },
         'learning_rate': {
             'values':
-                [0.01, 0.001, 0.001]
+                [0.01, 0.001, 0.0001]
         },
         # 'loss': {
         #     'values':
@@ -59,15 +59,15 @@ sweep_configuration = {
         # },
         'optimizer': {
             'values':
-                ['Adam', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad']
+                ['Adam', 'RMSprop', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad']
         },
         'activation_lstm_loop': {
             'values':
-                ['elu', 'tanh', 'sigmoid','selu']
+                ['elu', 'tanh', 'sigmoid']
         },
         'activation_lstm_classifier': {
             'values':
-                ['elu', 'tanh', 'sigmoid','selu']
+                ['elu', 'tanh', 'sigmoid']
         },
         'scaler': {
             'values':
@@ -75,7 +75,7 @@ sweep_configuration = {
         },
         'lstm_Bidirectional': {
             'values':
-                ['FALSE']  # 'TRUE',
+                ['TRUE','FALSE']  # ,
         }
     },
     'program': 'model.py'
@@ -246,7 +246,7 @@ def train_model():
         early_stopping_baseline1 = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
-            patience=0,  # how many epochs to wait before stopping
+            patience=1,  # how many epochs to wait before stopping
             restore_best_weights=True,
             baseline=0.7
         )
@@ -271,7 +271,7 @@ def train_model():
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=10, batch_size=config.batch_size, verbose=1,
+        model.fit(x_train, y_train, epochs=5, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping, early_stopping_baseline1,early_stopping_baseline2, WandbCallback()]
                   )
