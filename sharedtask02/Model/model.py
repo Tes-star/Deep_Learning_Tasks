@@ -188,8 +188,8 @@ def train_model():
 
         match config.activation_lstm_loop:
             case 'selu':
-                activation_lstm_classifier = selu
-                activation_lstm_classifier_init = lecun_normal
+                activation_lstm_loop = selu
+                activation_lstm_loop_init = lecun_normal
             case 'elu':
                 activation_lstm_loop = elu
                 activation_lstm_loop_init = GlorotNormal
