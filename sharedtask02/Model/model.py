@@ -16,6 +16,63 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidire
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
+sweep_configuration = {
+    'method': 'random',
+    'name': 'sweep',
+    'metric': {'goal': 'maximize', 'name': 'val_acc'},
+    'parameters':
+        {
+            'batch_size': {'values': [16, 32, 64]},
+            'epochs': {'values': [5, 10, 15]},
+            'lr': {'max': 0.1, 'min': 0.0001}
+        }
+}
+sweep_configuration = {
+    'method': 'bayes',
+    'metric': {'goal': 'minimize', 'name': 'mean_squared_error'},
+    'parameters': {
+        'batch_size': {
+            'values':
+                [128, 512, 1000, 10000]},
+        'dropout_rate': {
+            'values':
+                [0.2, 0.3, 0.4, 0.5]
+        },
+        'dropout_rate_change': {
+            'values':
+                [0.9, 1, 1.1]
+        },
+        'learning_rate': {
+            'values':
+                [0.01, 0.001, 0.0001]
+        },
+        'loss': {
+            'values':
+                ['CategoricalCrossentropy']
+        },
+
+        'neurons': {'max': 2000, 'min': 200}
+        ,
+        'neurons_rate_change': {
+            'values':
+                [0.5, 0.75, 0.9, 1]
+        },
+        'num_weights': {
+            'values':
+                [200000, 400000, 800000]
+        },
+        'optimizer': {
+            'values':
+                ['Adam', 'RMSprop', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad']
+        },
+        'scaler': {
+            'values':
+                ['StandardScaler', 'MinMaxScaler']
+        }
+    },
+    'program': 'model.py'
+}
+
 
 def load_data():
     train = pd.read_csv('../data/01_train/train.csv', header=None)
@@ -158,10 +215,10 @@ def train_model():
             restore_best_weights=True,
             baseline=0.7
         )
-        print(x_train.shape)
-        print(y_train.shape)
-        print(x_test.shape)
-        print(y_test.shape)
+        #print(x_train.shape)
+        #print(y_train.shape)
+        #print(x_test.shape)
+        #print(y_test.shape)
 
         model.fit(x_train, y_train, epochs=1, batch_size=config.batch_size, verbose=1,
                   # validation_data=(x_test, y_test),
@@ -243,6 +300,7 @@ if __name__ == '__main__':
 
     # define sweep_id
     sweep_id = 'gesqt2cs'
+    sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
                 entity="deep_learning_hsa")
