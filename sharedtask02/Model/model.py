@@ -20,7 +20,6 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidire
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
-
 sweep_configuration = {
     'method': 'bayes',
     'metric': {'goal': 'minimize', 'name': 'mean_squared_error'},
@@ -46,29 +45,29 @@ sweep_configuration = {
                 ['CategoricalCrossentropy']
         },
 
-        #'neurons': {'max': 2000, 'min': 200},
+        # 'neurons': {'max': 2000, 'min': 200},
         'lstm_units': {'max': 20, 'min': 5},
-        'LSTM_size': {'max': 50, 'min': 10},
+        'LSTM_size': {'max': 20, 'min': 7},
 
         # 'neurons_rate_change': {
         #     'values':
         #         [0.5, 0.75, 0.9, 1]
         # },
-        #'num_weights': {
+        # 'num_weights': {
         #    'values':
         #        [200000, 400000, 800000]
-        #},
+        # },
         'optimizer': {
             'values':
-                ['Adam', 'RMSprop', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad']
+                ['RMSprop', 'Adadelta', 'Adamax', 'Nadam', 'Adagrad', 'Adam']
         },
         'activation_lstm_loop': {
             'values':
-                ['elu', 'tanh', 'sigmoid']
+                ['elu', 'tanh', 'selu', 'sigmoid']
         },
         'activation_lstm_classifier': {
             'values':
-                ['elu', 'tanh', 'sigmoid']
+                ['elu', 'tanh', 'selu', 'sigmoid']
         },
         'scaler': {
             'values':
@@ -107,23 +106,24 @@ def create_traindataset(train):
 
 
 def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional, activation_lstm_loop,
-               activation_lstm_classifier,activation_lstm_classifier_init,activation_lstm_loop_init):
+               activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init):
     # RepeatVector(len_input),
     # TimeDistributed(Dense(hidden_size, activation = elu)),
 
     model = Sequential()
     model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
-                                 activation=activation_lstm_loop,kernel_initializer=activation_lstm_loop_init)))
+                                 activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)))
     model.add(Dropout(dropout_rate))
     for i in range(lstm_size):
         if lstm_Bidirectional == 'True':
-            model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,kernel_initializer=activation_lstm_loop_init)))
+            model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
+                                         kernel_initializer=activation_lstm_loop_init)))
         else:
             model.add(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop))
         model.add(Dropout(dropout_rate))
     model.add(LSTM(units=lstm_units))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(units=7, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init))
+    model.add(Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
     # model.build(x_train.shape[1], 1)
     # model.summary()
     return model
@@ -158,7 +158,7 @@ def train_model():
 
         # set configs
 
-        #neurons = config.neurons
+        # neurons = config.neurons
 
         # optimizer
         match config.optimizer:
@@ -195,7 +195,7 @@ def train_model():
                 activation_lstm_loop_init = GlorotNormal
             case 'tanh':
                 activation_lstm_loop = tanh
-                activation_lstm_loop_init=lecun_normal
+                activation_lstm_loop_init = lecun_normal
             case 'sigmoid':
                 activation_lstm_loop = sigmoid
                 activation_lstm_loop_init = GlorotNormal
@@ -203,14 +203,13 @@ def train_model():
         match config.activation_lstm_classifier:
             case 'selu':
                 activation_lstm_classifier = selu
-                activation_lstm_classifier_init=lecun_normal
+                activation_lstm_classifier_init = lecun_normal
             case 'elu':
                 activation_lstm_classifier = elu
                 activation_lstm_classifier_init = GlorotNormal
             case 'sigmoid':
                 activation_lstm_classifier = sigmoid
-                activation_lstm_classifier_init= GlorotNormal
-
+                activation_lstm_classifier_init = GlorotNormal
 
         scaler.fit_transform(x.reshape(-1, 1))
 
@@ -222,31 +221,38 @@ def train_model():
 
         # )
         # split dataset
-        x_train = x[trn_]
-        y_train = y[trn_]
-        x_test = x[val_]
-        y_test = y[val_]
-
+        dataset_size = 0
+        wandb.log({'dataset_size': dataset_size})
+        if dataset_size > 0:
+            x_train = x[trn_[:dataset_size]]
+            y_train = y[trn_[:dataset_size]]
+            x_test = x[val_[:dataset_size]]
+            y_test = y[val_[:dataset_size]]
+        else:
+            x_train = x[trn_]
+            y_train = y[trn_]
+            x_test = x[val_]
+            y_test = y[val_]
 
         early_stopping = EarlyStopping(
-            monitor='val_accuracy',
+            monitor='val_mean_squared_error',
             min_delta=0.001,  # minimium amount of change to count as an improvement
-            patience=10,  # how many epochs to wait before stopping
+            patience=5,  # how many epochs to wait before stopping
             restore_best_weights=True,
         )
-        early_stopping_baseline1 = EarlyStopping(
-            monitor='val_accuracy',
-            min_delta=0.001,  # minimium amount of change to count as an improvement
-            patience=50,  # how many epochs to wait before stopping
-            restore_best_weights=True,
-            baseline=0.65
-        )
+        # early_stopping_baseline1 = EarlyStopping(
+        #     monitor='val_accuracy',
+        #     min_delta=0.001,  # minimium amount of change to count as an improvement
+        #     patience=50,  # how many epochs to wait before stopping
+        #     restore_best_weights=True,
+        #     baseline=0.65
+        # )
         early_stopping_baseline2 = EarlyStopping(
-            monitor='val_accuracy',
-            min_delta=0.001,  # minimium amount of change to count as an improvement
-            patience=100,  # how many epochs to wait before stopping
+            monitor='val_mean_squared_error',
+            min_delta=0,  # minimium amount of change to count as an improvement
+            patience=5,  # how many epochs to wait before stopping
             restore_best_weights=True,
-            baseline=0.7
+            baseline=0.98
         )
         # print(x_train.shape)
         # print(y_train.shape)
@@ -260,9 +266,9 @@ def train_model():
                            activation_lstm_loop_init=activation_lstm_loop_init,
                            activation_lstm_classifier_init=activation_lstm_classifier_init)
 
-        model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['acc', 'mean_squared_error'])
+        model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=100, batch_size=config.batch_size, verbose=1,
+        model.fit(x_train, y_train, epochs=5, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[WandbCallback()]
                   )
@@ -271,6 +277,7 @@ def train_model():
         print("Finshed Job")
         model.summary()
         wandb.finish()
+        break
 
         # callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
 
