@@ -207,7 +207,7 @@ def train_model():
             case 'StandardScaler':
                 scaler = StandardScaler()
                 baseline1 = 1
-                baseline2 = 0.7
+                baseline2 = 0.8
             case 'MinMaxScaler':
                 scaler = MinMaxScaler()
                 baseline1 = 0.035
@@ -242,7 +242,7 @@ def train_model():
             case 'linear':
                 activation_lstm_classifier = 'linear'
                 activation_lstm_classifier_init = GlorotNormal
-        if kernel_init == 'FALSE':
+        if config.kernel_init == 'FALSE':
             activation_lstm_classifier_init = None
             activation_lstm_loop_init = None
 
