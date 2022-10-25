@@ -46,8 +46,8 @@ sweep_configuration = {
         # },
 
         # 'neurons': {'max': 2000, 'min': 200},
-        'lstm_units': {'max': 15, 'min': 5},
-        'LSTM_size': {'max': 30, 'min': 10},
+        'lstm_units': {'max': 5, 'min': 2},
+        'LSTM_size': {'max': 60, 'min': 30},
 
         # 'neurons_rate_change': {
         #     'values':
@@ -224,13 +224,13 @@ def train_model():
 
         # )
         # split dataset
-        dataset_size = 0
+        dataset_size = int(x.shape[0]*config.data_proportion)
         wandb.log({'dataset_size': dataset_size})
         if dataset_size > 0:
             x_train = x[trn_[:dataset_size]]
             y_train = y[trn_[:dataset_size]]
-            x_test = x[val_[:dataset_size]]
-            y_test = y[val_[:dataset_size]]
+            x_test = x[val_[:int(dataset_size*0.3)]]
+            y_test = y[val_[:int(dataset_size*0.3)]]
         else:
             x_train = x[trn_]
             y_train = y[trn_]
@@ -271,7 +271,7 @@ def train_model():
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=20, batch_size=config.batch_size, verbose=1,
+        model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping,  WandbCallback()] #early_stopping_baseline1,early_stopping_baseline2,
                   )
@@ -352,7 +352,7 @@ if __name__ == '__main__':
     n_future = 7
 
     # define sweep_id
-    sweep_id = 'gesqt2cs'
+    sweep_id = '5xn3xb54'
     #sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
