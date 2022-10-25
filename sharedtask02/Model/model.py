@@ -17,7 +17,7 @@ import tensorflow as tf
 from keras.models import Model
 from keras.metrics import Precision, Recall
 from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidirectional, TimeDistributed, RepeatVector, \
-    GRU, RNN
+    GRU, RNN, SimpleRNN
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
@@ -122,11 +122,10 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
                                  kernel_initializer=activation_lstm_loop_init)
             component_end = GRU(units=lstm_units)
         case 'RNN':
-            component_first = RNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
-                                  activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)
-            component_loop = RNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
-                                 kernel_initializer=activation_lstm_loop_init)
-            component_end = RNN(units=lstm_units)
+            component_end = SimpleRNN(units=lstm_units)
+    component_first = SimpleRNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                          activation=activation_lstm_loop)
+    component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop)
 
     model = Sequential()
     model.add(Bidirectional(component_first))
@@ -370,7 +369,7 @@ if __name__ == '__main__':
     n_future = 7
 
     # define sweep_id
-    sweep_id = '1bq9af8u'
+    sweep_id = 'taip3wae'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
