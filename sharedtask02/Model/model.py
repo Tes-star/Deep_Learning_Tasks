@@ -211,11 +211,13 @@ def train_model():
                 baseline1 = 1
                 baseline2 = 0.8
                 baseline3 = 0.5
+                baseline4 = 0.2
             case 'MinMaxScaler':
                 scaler = MinMaxScaler()
                 baseline1 = 0.035
                 baseline2 = 0.015
                 baseline3 = 0.013
+                baseline4 = 0.013
         match config.activation_lstm_loop:
             case 'selu':
                 activation_lstm_loop = selu
@@ -293,12 +295,19 @@ def train_model():
             restore_best_weights=True,
             baseline=baseline2
         )
-        early_stopping_baseline2 = EarlyStopping(
+        early_stopping_baseline3 = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
             patience=50,  # how many epochs to wait before stopping
             restore_best_weights=True,
             baseline=baseline3
+        )
+        early_stopping_baseline4 = EarlyStopping(
+            monitor='val_mean_squared_error',
+            min_delta=0,  # minimium amount of change to count as an improvement
+            patience=125,  # how many epochs to wait before stopping
+            restore_best_weights=True,
+            baseline=baseline4
         )
         # print(x_train.shape)
         # print(y_train.shape)
@@ -315,7 +324,7 @@ def train_model():
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=200, batch_size=256, verbose=1,
+        model.fit(x_train, y_train, epochs=400, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
                   )
@@ -337,7 +346,7 @@ if __name__ == '__main__':
 
 
     # define sweep_id
-    sweep_id = '7s8mfbqh'
+    sweep_id = 'bly5pxe6'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
