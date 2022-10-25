@@ -16,7 +16,8 @@ import numpy as np
 import tensorflow as tf
 from keras.models import Model
 from keras.metrics import Precision, Recall
-from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidirectional, TimeDistributed, RepeatVector
+from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidirectional, TimeDistributed, RepeatVector, \
+    GRU, RNN
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
@@ -75,7 +76,7 @@ sweep_configuration = {
         },
         'lstm_Bidirectional': {
             'values':
-                ['TRUE','FALSE']  # ,
+                ['TRUE', 'FALSE']  # ,
         }
     },
     'program': 'model.py'
@@ -106,22 +107,37 @@ def create_traindataset(train):
 
 
 def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional, activation_lstm_loop,
-               activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init):
-    # RepeatVector(len_input),
-    # TimeDistributed(Dense(hidden_size, activation = elu)),
+               activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init, rnn_cell):
+    match rnn_cell:
+        case 'LSTM':
+            component_first = LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                                   activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)
+            component_loop = LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
+                                  kernel_initializer=activation_lstm_loop_init)
+            component_end = LSTM(units=lstm_units)
+        case 'GRU':
+            component_first = GRU(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                                  activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)
+            component_loop = GRU(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
+                                 kernel_initializer=activation_lstm_loop_init)
+            component_end = GRU(units=lstm_units)
+        case 'RNN':
+            component_first = RNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                                  activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)
+            component_loop = RNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
+                                 kernel_initializer=activation_lstm_loop_init)
+            component_end = RNN(units=lstm_units)
 
     model = Sequential()
-    model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
-                                 activation=activation_lstm_loop, kernel_initializer=activation_lstm_loop_init)))
+    model.add(Bidirectional(component_first))
     model.add(Dropout(dropout_rate))
     for i in range(lstm_size):
         if lstm_Bidirectional == 'True':
-            model.add(Bidirectional(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
-                                         kernel_initializer=activation_lstm_loop_init)))
+            model.add(Bidirectional(component_loop))
         else:
-            model.add(LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop))
+            model.add(component_loop)
         model.add(Dropout(dropout_rate))
-    model.add(LSTM(units=lstm_units))
+    model.add(component_end)
     model.add(Dropout(dropout_rate))
     model.add(Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
     # model.build(x_train.shape[1], 1)
@@ -224,13 +240,13 @@ def train_model():
 
         # )
         # split dataset
-        dataset_size = int(x.shape[0]*config.data_proportion)
+        dataset_size = int(x.shape[0] * config.data_proportion)
         wandb.log({'dataset_size': dataset_size})
         if dataset_size > 0:
             x_train = x[trn_[:dataset_size]]
             y_train = y[trn_[:dataset_size]]
-            x_test = x[val_[:int(dataset_size*0.3)]]
-            y_test = y[val_[:int(dataset_size*0.3)]]
+            x_test = x[val_[:int(dataset_size * 0.3)]]
+            y_test = y[val_[:int(dataset_size * 0.3)]]
         else:
             x_train = x[trn_]
             y_train = y[trn_]
@@ -246,16 +262,16 @@ def train_model():
         early_stopping_baseline1 = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
-            patience=1,  # how many epochs to wait before stopping
+            patience=5,  # how many epochs to wait before stopping
             restore_best_weights=True,
-            baseline=0.7
+            baseline=1.1
         )
         early_stopping_baseline2 = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
-            patience=5,  # how many epochs to wait before stopping
+            patience=20,  # how many epochs to wait before stopping
             restore_best_weights=True,
-            baseline=0.3
+            baseline=0.7
         )
         # print(x_train.shape)
         # print(y_train.shape)
@@ -267,13 +283,15 @@ def train_model():
                            activation_lstm_loop=activation_lstm_loop,
                            activation_lstm_classifier=activation_lstm_classifier,
                            activation_lstm_loop_init=activation_lstm_loop_init,
-                           activation_lstm_classifier_init=activation_lstm_classifier_init)
+                           activation_lstm_classifier_init=activation_lstm_classifier_init,
+                           rnn_cell=config.rnn_cell)
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
+        model.fit(x_train, y_train, epochs=1000, batch_size=256, verbose=1,
                   validation_data=(x_test, y_test),
-                  callbacks=[early_stopping,  WandbCallback()] #early_stopping_baseline1,early_stopping_baseline2,
+                  callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
+                  # early_stopping_baseline1,early_stopping_baseline2,
                   )
         evaluate_model(model, x_test, y_test, scaler)
 
@@ -352,8 +370,8 @@ if __name__ == '__main__':
     n_future = 7
 
     # define sweep_id
-    sweep_id = '5xn3xb54'
-    #sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
+    sweep_id = '1bq9af8u'
+    # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
                 entity="deep_learning_hsa")
