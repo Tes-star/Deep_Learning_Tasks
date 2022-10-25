@@ -146,20 +146,22 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
 
 def evaluate_model(model, x_test, y_test, scaler):
     y_pred = model.predict(x_test)
-    print('x_test:')
-    print(x_test[20])
-    print('y_pred:')
-    print(y_pred[20])
+    print('x_test scaled:')
+    print(x_test[1,:20].reshape(1,-1))
+    print('y_pred: scaled')
+    print(y_pred[0:20])
+    print('y_pred: scaled')
+    print(y_test[0:20])
 
     y_pred = y_pred.reshape(-1, 1)
     y_test = y_test.reshape(-1, 1)
 
     y_pred = scaler.inverse_transform(y_pred)
     y_test = scaler.inverse_transform(y_test)
-    print('x_test:')
-    print(x_test[20])
+    print('y_test:')
+    print(y_test[0:20])
     print('y_pred:')
-    print(y_pred[20])
+    print(y_pred[0:20])
     mse = mean_squared_error(y_pred, y_test)
     wandb.log({'mse_real': mse})
 
@@ -208,10 +210,12 @@ def train_model():
                 scaler = StandardScaler()
                 baseline1 = 1
                 baseline2 = 0.8
+                baseline3 = 0.5
             case 'MinMaxScaler':
                 scaler = MinMaxScaler()
                 baseline1 = 0.035
                 baseline2 = 0.015
+                baseline3 = 0.013
         match config.activation_lstm_loop:
             case 'selu':
                 activation_lstm_loop = selu
@@ -289,6 +293,13 @@ def train_model():
             restore_best_weights=True,
             baseline=baseline2
         )
+        early_stopping_baseline2 = EarlyStopping(
+            monitor='val_mean_squared_error',
+            min_delta=0,  # minimium amount of change to count as an improvement
+            patience=50,  # how many epochs to wait before stopping
+            restore_best_weights=True,
+            baseline=baseline3
+        )
         # print(x_train.shape)
         # print(y_train.shape)
         # print(x_test.shape)
@@ -304,7 +315,7 @@ def train_model():
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
 
-        model.fit(x_train, y_train, epochs=1000, batch_size=256, verbose=1,
+        model.fit(x_train, y_train, epochs=200, batch_size=256, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
                   )
@@ -324,7 +335,6 @@ if __name__ == '__main__':
     """
     # load data
 
-    n_future = 7
 
     # define sweep_id
     sweep_id = '7s8mfbqh'
