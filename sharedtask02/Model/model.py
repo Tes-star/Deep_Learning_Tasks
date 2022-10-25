@@ -123,9 +123,9 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
             component_end = GRU(units=lstm_units)
         case 'RNN':
             component_end = SimpleRNN(units=lstm_units)
-    component_first = SimpleRNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
-                                activation=activation_lstm_loop)
-    component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop)
+            component_first = SimpleRNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
+                                        activation=activation_lstm_loop)
+            component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop)
 
     model = Sequential()
     model.add(Bidirectional(component_first))
@@ -150,7 +150,6 @@ def evaluate_model(model, x_test, y_test, scaler):
     print(x_test[20])
     print('y_pred:')
     print(y_pred[20])
-
 
     y_pred = y_pred.reshape(-1, 1)
     y_test = y_test.reshape(-1, 1)
@@ -240,6 +239,12 @@ def train_model():
             case 'tanh':
                 activation_lstm_classifier = tanh
                 activation_lstm_classifier_init = lecun_normal
+            case 'linear':
+                activation_lstm_classifier = 'linear'
+                activation_lstm_classifier_init = GlorotNormal
+        if kernel_init == 'FALSE':
+            activation_lstm_classifier_init = None
+            activation_lstm_loop_init = None
 
         scaler.fit_transform(x.reshape(-1, 1))
 
