@@ -124,7 +124,7 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
         case 'RNN':
             component_end = SimpleRNN(units=lstm_units)
     component_first = SimpleRNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
-                          activation=activation_lstm_loop)
+                                activation=activation_lstm_loop)
     component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop)
 
     model = Sequential()
@@ -146,12 +146,21 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
 
 def evaluate_model(model, x_test, y_test, scaler):
     y_pred = model.predict(x_test)
+    print('x_test:')
+    print(x_test[20])
+    print('y_pred:')
+    print(y_pred[20])
+
 
     y_pred = y_pred.reshape(-1, 1)
     y_test = y_test.reshape(-1, 1)
 
     y_pred = scaler.inverse_transform(y_pred)
     y_test = scaler.inverse_transform(y_test)
+    print('x_test:')
+    print(x_test[20])
+    print('y_pred:')
+    print(y_pred[20])
     mse = mean_squared_error(y_pred, y_test)
     wandb.log({'mse_real': mse})
 
@@ -198,9 +207,12 @@ def train_model():
         match config.scaler:
             case 'StandardScaler':
                 scaler = StandardScaler()
+                baseline1 = 1
+                baseline2 = 0.7
             case 'MinMaxScaler':
                 scaler = MinMaxScaler()
-
+                baseline1 = 0.035
+                baseline2 = 0.015
         match config.activation_lstm_loop:
             case 'selu':
                 activation_lstm_loop = selu
@@ -255,7 +267,7 @@ def train_model():
         early_stopping = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0.001,  # minimium amount of change to count as an improvement
-            patience=5,  # how many epochs to wait before stopping
+            patience=10,  # how many epochs to wait before stopping
             restore_best_weights=True,
         )
         early_stopping_baseline1 = EarlyStopping(
@@ -263,14 +275,14 @@ def train_model():
             min_delta=0,  # minimium amount of change to count as an improvement
             patience=5,  # how many epochs to wait before stopping
             restore_best_weights=True,
-            baseline=1.1
+            baseline=baseline1
         )
         early_stopping_baseline2 = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
             patience=20,  # how many epochs to wait before stopping
             restore_best_weights=True,
-            baseline=0.7
+            baseline=baseline2
         )
         # print(x_train.shape)
         # print(y_train.shape)
@@ -290,7 +302,6 @@ def train_model():
         model.fit(x_train, y_train, epochs=1000, batch_size=256, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
-                  # early_stopping_baseline1,early_stopping_baseline2,
                   )
         evaluate_model(model, x_test, y_test, scaler)
 
@@ -300,64 +311,6 @@ def train_model():
         print('break_start')
         break
         print('break_did_not_start')
-
-        # callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
-
-    # from keras.layers import Bidirectional
-    #
-    # inputs = tf.keras.Input(shape=(x_train.shape[-1],))
-    #
-    # # create hidden layers
-    # num_weights = config.num_weights
-    # free_weights = num_weights
-    # neurons_rate_change = config.neurons_rate_change
-    # dropout_rate = config.dropout_rate
-    # neuron_list = [neurons]
-    # free_weights = free_weights - neurons * neuron_list[-1]
-    #
-    # while free_weights > 0:
-    #     neurons = int(neurons * neurons_rate_change)
-    #     if free_weights - (neurons * neuron_list[-1]) > 0:
-    #         free_weights = free_weights - neurons * neuron_list[-1]
-    #         neuron_list.append(neurons)
-    #     else:
-    #         break
-    #
-    # neuron_list.sort(reverse=True)
-    # # create hidden layers dynamic
-    # d = {}
-    # d['hl0'] = Dense(neuron_list[0], activation='relu')(inputs)
-    # d['hl1'] = Dropout(rate=dropout_rate)(d['hl0'])
-    #
-    # for i in range(len(neuron_list) - 1):
-    #     dropout_rate = min[dropout_rate * config.dropout_rate_change, 0.5]
-    #     d["hl{0}".format(i * 2 + 2)] = Dense(neuron_list[1 + i], activation='relu')(d["hl{0}".format(i * 2 + 1)])
-    #     d["hl{0}".format(i * 2 + 3)] = Dropout(rate=dropout_rate)(d["hl{0}".format(i * 2 + 2)])
-    #
-    # # create output neurons
-    # output = Dense(10, activation='softmax')(d["hl{0}".format(len(neuron_list) * 2 - 1)])
-    #
-    # # define model
-    # model = Model(inputs=inputs, outputs=output)
-    #
-    # model.compile(loss=tf.keras.losses.CategoricalCrossentropy(),
-    #               optimizer=optimizer,
-    #               metrics=['accuracy', Recall(), Precision(), ])
-    #
-    # model.summary()
-    #
-    #
-    #
-    # model.fit(x_train, y_train_oh, epochs=1000, batch_size=config.batch_size, verbose=1
-    #           , callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
-    #           , validation_data=(x_val, y_val_oh)
-    #           )
-    # print('Training ended successful')
-    #
-    # from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-    #
-    #
-    #
 
 
 if __name__ == '__main__':
@@ -369,7 +322,7 @@ if __name__ == '__main__':
     n_future = 7
 
     # define sweep_id
-    sweep_id = 'taip3wae'
+    sweep_id = 'y90e8k4t'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
