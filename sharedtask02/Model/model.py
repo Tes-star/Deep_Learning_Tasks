@@ -107,7 +107,8 @@ def create_traindataset(train):
 
 
 def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional, activation_lstm_loop,
-               activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init, rnn_cell):
+               activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init, rnn_cell,
+               end_dense, start_dense):
     match rnn_cell:
         case 'LSTM':
             component_first = LSTM(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
@@ -122,22 +123,37 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
                                  kernel_initializer=activation_lstm_loop_init)
             component_end = GRU(units=lstm_units)
         case 'RNN':
-            component_end = SimpleRNN(units=lstm_units)
             component_first = SimpleRNN(units=lstm_units, return_sequences=True, input_shape=(x_train.shape[1], 1),
                                         activation=activation_lstm_loop)
             component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_loop)
+            component_end = SimpleRNN(units=lstm_units)
 
     model = Sequential()
-    model.add(Bidirectional(component_first))
-    model.add(Dropout(dropout_rate))
+
+    if start_dense == 'TRUE':
+        model.add(
+            Dense(units=lstm_units, activation=activation_lstm_loop,
+                  kernel_initializer=activation_lstm_loop_init, input_shape=(x_train.shape[1], 1)))
+        model.add(Dropout(dropout_rate))
+    else:
+        model.add(Bidirectional(component_first))
+        model.add(Dropout(dropout_rate))
+
     for i in range(lstm_size):
         if lstm_Bidirectional == 'True':
             model.add(Bidirectional(component_loop))
         else:
             model.add(component_loop)
         model.add(Dropout(dropout_rate))
+
     model.add(component_end)
     model.add(Dropout(dropout_rate))
+
+    if end_dense == 'TRUE':
+        model.add(
+            Dense(units=lstm_units, activation=activation_lstm_loop,
+                  kernel_initializer=activation_lstm_loop_init))
+        model.add(Dropout(dropout_rate))
     model.add(Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
     # model.build(x_train.shape[1], 1)
     # model.summary()
@@ -147,7 +163,7 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional,
 def evaluate_model(model, x_test, y_test, scaler):
     y_pred = model.predict(x_test)
     print('x_test scaled:')
-    print(x_test[1,:20].reshape(1,-1))
+    print(x_test[1, :20].reshape(1, -1))
     print('y_pred: scaled')
     print(y_pred[0:20])
     print('y_pred: scaled')
@@ -180,6 +196,8 @@ def train_model():
         # wandb.init(group=wandb.util.generate_id(), job_type="split_" + str(fold))
         # Access all hyperparameter values through wandb.config
         config = wandb.config
+        if config.start_dense == 'FALSE' and config.end_dense == 'FALSE':
+            break
 
         # set configs
 
@@ -320,10 +338,14 @@ def train_model():
                            activation_lstm_classifier=activation_lstm_classifier,
                            activation_lstm_loop_init=activation_lstm_loop_init,
                            activation_lstm_classifier_init=activation_lstm_classifier_init,
-                           rnn_cell=config.rnn_cell)
+                           rnn_cell=config.rnn_cell,
+                           end_dense=config.end_dense,
+                           start_dense=config.start_dense
+                           )
 
         model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
-
+        model.build(input_shape=(x_train.shape))
+        model.summary()
         model.fit(x_train, y_train, epochs=400, batch_size=config.batch_size, verbose=1,
                   validation_data=(x_test, y_test),
                   callbacks=[early_stopping, early_stopping_baseline1, early_stopping_baseline2, WandbCallback()]
@@ -331,7 +353,7 @@ def train_model():
         evaluate_model(model, x_test, y_test, scaler)
 
         print("Finshed Job")
-        model.summary()
+
         wandb.finish()
         print('break_start')
         break
@@ -344,9 +366,8 @@ if __name__ == '__main__':
     """
     # load data
 
-
     # define sweep_id
-    sweep_id = 'iugoempw'
+    sweep_id = 'dwppu8x6'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
