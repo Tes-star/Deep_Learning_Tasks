@@ -90,20 +90,32 @@ def load_data():
     return train, sampleTest, sampleSubmission
 
 
-def create_traindataset(train):
-    x = []
-    y = []
+def create_traindataset(data):
+    x_train=[]
+    y_train=[]
+    x_test=[]
+    y_test=[]
     n_future = 7  # next 4 days temperature forecast
     n_past = 90  # Past 90 days
 
-    train = train.to_numpy()
+    train = data.to_numpy()[:14]
+    test = data.to_numpy()[14:]
+
+
     for j in range(0, len(train)):
         for i in range(0, len(train[j]) - n_past - n_future + 1):
-            x.append(train[j, i: i + n_past])
-            y.append(train[j, i + n_past: i + n_past + n_future])
-    x, y = np.array(x), np.array(y)
-    x = np.reshape(x, (x.shape[0], x.shape[1], 1))
-    return x, y
+            x_train.append(train[j, i: i + n_past])
+            y_train.append(train[j, i + n_past: i + n_past + n_future])
+
+    x_train, y_train =np.array(x_train), np.array(y_train)
+
+    for j in range(0, len(test)):
+        for i in range(0, len(test[j]) - n_past - n_future + 1):
+            x_test.append(test[j, i: i + n_past])
+            y_test.append(test[j, i + n_past: i + n_past + n_future])
+
+    x_test, y_test =np.array(x_test), np.array(y_test)
+    return x_train, y_train, x_test,y_test
 
 
 def load_model(x_train, lstm_units, lstm_size, dropout_rate, lstm_Bidirectional, activation_lstm_loop,
@@ -346,7 +358,7 @@ if __name__ == '__main__':
 
 
     # define sweep_id
-    sweep_id = 'iugoempw'
+    sweep_id = 'qfy2yfid'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
