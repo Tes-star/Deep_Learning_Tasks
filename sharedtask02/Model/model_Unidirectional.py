@@ -1,6 +1,7 @@
+import keras
 from imblearn.over_sampling import SMOTE
 import pandas as pd
-from keras import Sequential, initializers
+from keras import Sequential
 from keras.activations import sigmoid, tanh, elu, selu, relu
 from keras.initializers.initializers_v2 import GlorotNormal, HeNormal
 from keras.utils import to_categorical
@@ -22,7 +23,6 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidire
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
-
 def load_data():
     train = pd.read_csv('../data/01_train/train.csv', header=None)
     sampleTest = pd.read_csv('../data/01_train/sampleTest.csv')
@@ -30,7 +30,7 @@ def load_data():
     return train, sampleTest, sampleSubmission
 
 
-def create_traindataset(data, ):
+def create_traindataset(data,):
     x_train = []
     y_train = []
     x_test = []
@@ -41,6 +41,16 @@ def create_traindataset(data, ):
     data = data.sample(frac=1, random_state=1234).reset_index(drop=True)
     train = data.to_numpy()[:14]
     test = data.to_numpy()[14:]
+
+    # for j in range(0, len(train)):
+    #     for i in range(0, len(train[j]) - n_past - n_future + 1):
+    #         x_train.append(train[j, i: i + n_past])
+    #         y_train.append(train[j, i+n_future: i + n_past + n_future])
+    #
+    # for j in range(0, len(test)):
+    #     for i in range(0, len(test[j]) - n_past - n_future + 1):
+    #         x_test.append(test[j, i: i + n_past])
+    #         y_test.append(test[j, i + n_future: i + n_past + n_future])
 
     for j in range(0, len(train)):
         for i in range(0, len(train[j]) - n_past - n_future + 1):
@@ -58,90 +68,45 @@ def create_traindataset(data, ):
     x_test = np.expand_dims(np.array(x_test), axis=-1)
     y_test = np.expand_dims(np.array(y_test), axis=-1)
 
-    # x_train, y_train = shuffle(x_train, y_train)
-    # x_test, y_test = shuffle(x_test, y_test)
+    #x_train, y_train = shuffle(x_train, y_train)
+    #x_test, y_test = shuffle(x_test, y_test)
 
     return x_train, y_train, x_test, y_test
 
 
-def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loop,
+def load_model(x_train, lstm_units, lstm_size, dropout_rate,  activation_lstm_loop,
                activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init, rnn_cell,
-               end_dense, start_dense, batch_normalisation):
+               end_dense, start_dense,batch_normalisation):
+
     match rnn_cell:
         case 'LSTM':
-            component_loop = LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
-                                  kernel_initializer=activation_lstm_loop_init
+            component_loop = LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_classifier,
+                                  kernel_initializer=activation_lstm_classifier_init
                                   )
-            component_end = LSTM(units=lstm_units, return_sequences=False, activation=activation_lstm_loop,
-                                 kernel_initializer=activation_lstm_loop_init
-                                 )
         case 'GRU':
-            component_loop = GRU(units=lstm_units, return_sequences=True, activation=activation_lstm_loop,
-                                 kernel_initializer=activation_lstm_loop_init
+            component_loop = GRU(units=lstm_units, return_sequences=True, activation=activation_lstm_classifier,
+                                 kernel_initializer=activation_lstm_classifier_init
                                  )
-            component_end = GRU(units=lstm_units, return_sequences=False, activation=activation_lstm_loop,
-                                kernel_initializer=activation_lstm_loop_init
-                                )
-        case 'iRNN':
-            component_loop = SimpleRNN(units=lstm_units,
-                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                       recurrent_initializer=initializers.Identity(gain=1.0),
-                                       activation='relu', return_sequences=True)
-            component_end = SimpleRNN(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
-        case 'iGRU':
-            component_loop = GRU(units=lstm_units,
-                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                       recurrent_initializer=initializers.Identity(gain=1.0),
-                                       activation='relu', return_sequences=True)
-            component_end = GRU(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
-        case 'iLSTM':
-            component_loop = LSTM(units=lstm_units,
-                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                       recurrent_initializer=initializers.Identity(gain=1.0),
-                                       activation='relu', return_sequences=True)
-            component_end = LSTM(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
+        case 'RNN':
+            component_loop = SimpleRNN(units=lstm_units, return_sequences=True, activation=activation_lstm_classifier,
+                                       kernel_initializer=activation_lstm_classifier_init
+                                       )
 
-    model = Sequential()
-    model.add(Input(shape=(x_train.shape[1], 1)))
-    if batch_normalisation == 'TRUE':
-        model.add(BatchNormalization())
-    model.add(Dropout(dropout_rate))
-    if start_dense == 'TRUE':
-        model.add(Dense(units=4, activation=activation_lstm_loop,
-                        kernel_initializer=activation_lstm_loop_init))
-        if batch_normalisation == 'TRUE':
-            model.add(BatchNormalization())
-        model.add(Dropout(dropout_rate))
+    #model = Sequential()
+    input= Input(shape=(x_train.shape[1], 1))
 
-    for i in range(lstm_size):
-        model.add(Bidirectional(component_loop))
-        if batch_normalisation == 'TRUE':
-            model.add(BatchNormalization())
-        model.add(Dropout(dropout_rate))
+    norm1=BatchNormalization()(input)
 
-    model.add(component_end)
-    if batch_normalisation == 'TRUE':
-        model.add(BatchNormalization())
-    model.add(Dropout(dropout_rate))
+    rnn=component_loop(norm1)
 
-    if end_dense == 'TRUE':
-        model.add(Dense(units=lstm_units, activation=activation_lstm_loop,
-                        kernel_initializer=activation_lstm_loop_init))
-        if batch_normalisation == 'TRUE':
-            model.add(BatchNormalization())
-        model.add(Dropout(dropout_rate))
+    slice= tf.slice(rnn, [1, 83, 0], [1,-1, -1])
+    norm2=BatchNormalization()(slice)
+    drop3= Dropout(dropout_rate)(norm2)
 
-    model.add(Dense(units=1, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
+    output=Dense(units=1, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init)(drop3)
 
+
+    model = keras.Model(input, output)
     # model.summary()
     return model
 
@@ -153,13 +118,10 @@ def evaluate_model(model, x_test, y_test, scaler):
     print('y_pred: scaled')
     print(y_pred[0:20])
     print('y_pred: scaled')
-    print(y_test[0:20])
 
-    y_pred = y_pred.reshape(-1, 1)
-    y_test = y_test.reshape(-1, 1)
+    y_pred=y_pred[90:]
+    y_test = y_test[90:]
 
-    y_pred = scaler.inverse_transform(y_pred)
-    y_test = scaler.inverse_transform(y_test)
     print('y_test:')
     print(y_test[0:20])
     print('y_pred:')
@@ -183,7 +145,7 @@ def train_model():
     # for fold, (trn_, val_) in enumerate(kf.split(X=x_train)):
     # set wandb configs
 
-    batch_size=config.batch_size
+
     # set configs
 
     # neurons = config.neurons
@@ -275,6 +237,51 @@ def train_model():
     # x = x.reshape(63972, 90, 1)
 
     # )
+    # split dataset
+
+    dataset_size = int(x_train.shape[0] * config.data_proportion)
+    wandb.log({'dataset_size': dataset_size})
+    if dataset_size > 0:
+        x_train = x_train[:dataset_size]
+        y_train = y_train[:dataset_size]
+        x_test = x_test[:dataset_size]
+        y_test = y_test[:dataset_size]
+
+    early_stopping = EarlyStopping(
+        monitor='val_mean_squared_error',
+        min_delta=0.00,  # minimium amount of change to count as an improvement
+        patience=10,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+    )
+    early_stopping_baseline1 = EarlyStopping(
+        monitor='val_mean_squared_error',
+        min_delta=0,  # minimium amount of change to count as an improvement
+        patience=5,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline=baseline1
+    )
+    early_stopping_baseline2 = EarlyStopping(
+        monitor='val_mean_squared_error',
+        min_delta=0,  # minimium amount of change to count as an improvement
+        patience=20,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline=baseline2
+    )
+    early_stopping_baseline3 = EarlyStopping(
+        monitor='val_mean_squared_error',
+        min_delta=0,  # minimium amount of change to count as an improvement
+        patience=50,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline=baseline3
+    )
+    early_stopping_baseline4 = EarlyStopping(
+        monitor='val_mean_squared_error',
+        min_delta=0,  # minimium amount of change to count as an improvement
+        patience=125,  # how many epochs to wait before stopping
+        restore_best_weights=True,
+        baseline=baseline4
+    )
+
     x_train = tf.convert_to_tensor(x_train)
     y_train = tf.convert_to_tensor(y_train)
     x_test = tf.convert_to_tensor(x_test)
@@ -295,81 +302,15 @@ def train_model():
                        batch_normalisation=config.batch_normalisation
                        )
     print(y_test.shape)
-    callbacks=[]
+
 
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
-    data_proportion = config.data_proportion
-    if model.count_params() >= 40000:
-        data_proportion = 0.5
-        batch_size=5000
 
-        callbacks.append()
-        baseline1 = 20
-        baseline2 = 11
-        early_stopping_baseline_sonder = EarlyStopping(
-            monitor='val_mean_squared_error',
-            min_delta=0,  # minimium amount of change to count as an improvement
-            patience=10,  # how many epochs to wait before stopping
-            restore_best_weights=True,
-            baseline=12
-        )
-        callbacks.append(early_stopping_baseline_sonder)
-
-    dataset_size = int(x_train.shape[0] * data_proportion)
-    wandb.log({'dataset_size': dataset_size})
-    if dataset_size > 0:
-        x_train = x_train[:dataset_size]
-        y_train = y_train[:dataset_size]
-        x_test = x_test[:dataset_size]
-        y_test = y_test[:dataset_size]
-
-    early_stopping = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=0.00,  # minimium amount of change to count as an improvement
-        patience=10,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-    )
-    callbacks.append(early_stopping)
-    early_stopping_baseline1 = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=0,  # minimium amount of change to count as an improvement
-        patience=10,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-        baseline=baseline1
-    )
-    callbacks.append(early_stopping_baseline1)
-
-    early_stopping_baseline2 = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=0,  # minimium amount of change to count as an improvement
-        patience=20,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-        baseline=baseline2
-    )
-    callbacks.append(early_stopping_baseline2)
-
-    early_stopping_baseline3 = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=0,  # minimium amount of change to count as an improvement
-        patience=50,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-        baseline=baseline3
-    )
-    callbacks.append(early_stopping_baseline3)
-
-    early_stopping_baseline4 = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=0,  # minimium amount of change to count as an improvement
-        patience=125,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-        baseline=baseline4
-    )
-    callbacks.append(early_stopping_baseline4)
-
-    model.fit(x_train, y_train, epochs=1000, batch_size=batch_size, verbose=1,
+    model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
               validation_data=(x_test, y_test),
-              callbacks=callbacks)
+              callbacks=[WandbCallback(), early_stopping]
+              )
     #
     # evaluate_model(model, x_test, y_test, scaler)
 
@@ -377,7 +318,7 @@ def train_model():
     wandb.finish()
     print('break_start')
 
-    # print('break_did_not_start')
+    #print('break_did_not_start')
 
 
 if __name__ == '__main__':
@@ -387,7 +328,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'kf9t04tq'
+    sweep_id = 'wlz940sh'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
