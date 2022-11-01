@@ -23,6 +23,7 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidire
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
+
 def load_data():
     train = pd.read_csv('../data/01_train/train.csv', header=None)
     sampleTest = pd.read_csv('../data/01_train/sampleTest.csv')
@@ -30,7 +31,7 @@ def load_data():
     return train, sampleTest, sampleSubmission
 
 
-def create_traindataset(data,):
+def create_traindataset(data, ):
     x_train = []
     y_train = []
     x_test = []
@@ -41,16 +42,6 @@ def create_traindataset(data,):
     data = data.sample(frac=1, random_state=1234).reset_index(drop=True)
     train = data.to_numpy()[:14]
     test = data.to_numpy()[14:]
-
-    # for j in range(0, len(train)):
-    #     for i in range(0, len(train[j]) - n_past - n_future + 1):
-    #         x_train.append(train[j, i: i + n_past])
-    #         y_train.append(train[j, i+n_future: i + n_past + n_future])
-    #
-    # for j in range(0, len(test)):
-    #     for i in range(0, len(test[j]) - n_past - n_future + 1):
-    #         x_test.append(test[j, i: i + n_past])
-    #         y_test.append(test[j, i + n_future: i + n_past + n_future])
 
     for j in range(0, len(train)):
         for i in range(0, len(train[j]) - n_past - n_future + 1):
@@ -68,16 +59,16 @@ def create_traindataset(data,):
     x_test = np.expand_dims(np.array(x_test), axis=-1)
     y_test = np.expand_dims(np.array(y_test), axis=-1)
 
-    #x_train, y_train = shuffle(x_train, y_train)
-    #x_test, y_test = shuffle(x_test, y_test)
+    # x_train, y_train = shuffle(x_train, y_train)
+    # x_test, y_test = shuffle(x_test, y_test)
 
     return x_train, y_train, x_test, y_test
 
 
-def load_model(x_train, lstm_units, lstm_size, dropout_rate,  activation_lstm_loop,
+def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loop,
                activation_lstm_classifier, activation_lstm_classifier_init, activation_lstm_loop_init, rnn_cell,
-               end_dense, start_dense,batch_normalisation):
-    rnn_cell='iRNN'
+               end_dense, start_dense, batch_normalisation):
+    rnn_cell = 'iRNN'
     match rnn_cell:
         case 'LSTM':
             component_loop = LSTM(units=lstm_units, return_sequences=True, activation=activation_lstm_classifier,
@@ -92,21 +83,29 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate,  activation_lstm_lo
                                        kernel_initializer=activation_lstm_classifier_init
                                        )
         case 'iRNN':
-            component_loop =SimpleRNN(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
-    #model = Sequential()
-    input= Input(shape=(x_train.shape[1], 1))
-    norm1=BatchNormalization()(input)
+            component_loop = SimpleRNN(units=lstm_units,
+                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
+                                       recurrent_initializer=initializers.Identity(gain=1.0),
+                                       activation=activation_lstm_classifier)
+    # model = Sequential()
+    input = Input(shape=(x_train.shape[1], 1))
+    norm1 = BatchNormalization()(input)
 
-    irnn=component_loop(norm1)
+    irnn = component_loop(norm1)
 
-    norm2=BatchNormalization()(irnn)
-    drop3= Dropout(dropout_rate)(norm2)
+    if end_dense == 'TRUE':
+        norm2 = BatchNormalization()(irnn)
+        drop3 = Dropout(dropout_rate)(norm2)
+        dens = Dense(units=lstm_units, activation=activation_lstm_loop,
+                     kernel_initializer=activation_lstm_loop_init)(drop3)
+        norm3 = BatchNormalization()(dens)
+        drop4 = Dropout(dropout_rate)(norm3)
+    else:
+        norm2 = BatchNormalization()(irnn)
+        drop4 = Dropout(dropout_rate)(norm2)
 
-    output=Dense(units=1, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init)(drop3)
-
+    output = Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init)(
+        drop4)
 
     model = keras.Model(input, output)
     # model.summary()
@@ -115,19 +114,18 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate,  activation_lstm_lo
 
 def evaluate_model(model, x_test, y_test, scaler):
     y_pred = model.predict(x_test)
-    print('x_test scaled:')
-    print(x_test[1, :20].reshape(1, -1))
-    print('y_pred: scaled')
-    print(y_pred[0:20])
-    print('y_pred: scaled')
+    y_test=y_test.numpy().reshape(y_pred.shape)
+    print('x_test :')
+    print(x_test[:10])
+    print('y_pred :')
+    print(y_pred[:10])
+    print('y_test :')
+    print(y_test[:10])
 
-    y_pred=y_pred[90:]
-    y_test = y_test[90:]
+    print('dif')
+    print(y_test-y_pred)
 
-    print('y_test:')
-    print(y_test[0:20])
-    print('y_pred:')
-    print(y_pred[0:20])
+
     mse = mean_squared_error(y_pred, y_test)
     wandb.log({'mse_real': mse})
 
@@ -146,7 +144,6 @@ def train_model():
     kf = model_selection.KFold(splits, shuffle=True)
     # for fold, (trn_, val_) in enumerate(kf.split(X=x_train)):
     # set wandb configs
-
 
     # set configs
 
@@ -190,6 +187,18 @@ def train_model():
             baseline2 = 0.015
             baseline3 = 0.013
             baseline4 = 0.013
+
+    shape = x_train.shape
+
+    scaler.fit_transform(x_train.reshape(-1, 1))
+
+    x_train = scaler.transform(x_train.reshape(-1, 1))
+    x_train = x_train.reshape(shape)
+
+    shape = x_test.shape
+    x_test = scaler.transform(x_test.reshape(-1, 1))
+    x_test = x_test.reshape(shape)
+
     match config.activation_lstm_loop:
         case 'selu':
             activation_lstm_loop = selu
@@ -252,7 +261,7 @@ def train_model():
     early_stopping = EarlyStopping(
         monitor='val_mean_squared_error',
         min_delta=0.00,  # minimium amount of change to count as an improvement
-        patience=10,  # how many epochs to wait before stopping
+        patience=20,  # how many epochs to wait before stopping
         restore_best_weights=True,
     )
     early_stopping_baseline1 = EarlyStopping(
@@ -305,7 +314,6 @@ def train_model():
                        )
     print(y_test.shape)
 
-
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
 
@@ -314,13 +322,13 @@ def train_model():
               callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2, ]
               )
     #
-    # evaluate_model(model, x_test, y_test, scaler)
+    #evaluate_model(model, x_test, y_test, scaler)
 
     print("Finshed Job")
     wandb.finish()
     print('break_start')
 
-    #print('break_did_not_start')
+    # print('break_did_not_start')
 
 
 if __name__ == '__main__':
@@ -330,7 +338,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = '3pb1zlyh'
+    sweep_id = 'lrg4w08d'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",

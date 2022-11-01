@@ -103,7 +103,7 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate,  activation_lstm_lo
     norm2=BatchNormalization()(slice)
     drop3= Dropout(dropout_rate)(norm2)
 
-    output=Dense(units=1, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init)(drop3)
+    output=Dense(units=7, activation=activation_lstm_classifier,kernel_initializer=activation_lstm_classifier_init)(drop3)
 
 
     model = keras.Model(input, output)

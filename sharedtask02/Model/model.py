@@ -25,8 +25,8 @@ from sklearn.preprocessing import MinMaxScaler
 
 def load_data():
     train = pd.read_csv('../data/01_train/train.csv', header=None)
-    sampleTest = pd.read_csv('../data/01_train/sampleTest.csv')
-    sampleSubmission = pd.read_csv('../data/01_train/sampleSubmission.csv')
+    sampleTest = pd.read_csv('../data/01_train/sampleTest.csv', header=None)
+    sampleSubmission = pd.read_csv('../data/01_train/sampleSubmission.csv', header=None)
     return train, sampleTest, sampleSubmission
 
 
@@ -140,7 +140,7 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loo
             model.add(BatchNormalization())
         model.add(Dropout(dropout_rate))
 
-    model.add(Dense(units=1, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
+    model.add(Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init))
 
     # model.summary()
     return model
@@ -312,20 +312,19 @@ def train_model():
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
     data_proportion = config.data_proportion
-    if model.count_params() >= 40000:
+    if model.count_params() >= 80000:
         data_proportion = 0.5
-        batch_size=5000
 
         baseline1 = 20
         baseline2 = 11
         early_stopping_baseline_sonder = EarlyStopping(
             monitor='val_mean_squared_error',
             min_delta=0,  # minimium amount of change to count as an improvement
-            patience=10,  # how many epochs to wait before stopping
+            patience=5,  # how many epochs to wait before stopping
             restore_best_weights=True,
             baseline=12
         )
-        #callbacks.append(early_stopping_baseline_sonder)
+        callbacks.append(early_stopping_baseline_sonder)
 
     dataset_size = int(x_train.shape[0] * data_proportion)
     wandb.log({'dataset_size': dataset_size})
@@ -398,7 +397,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'smqn5wq6'
+    sweep_id = 'zjxgw1ev'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
