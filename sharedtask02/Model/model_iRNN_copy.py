@@ -327,7 +327,7 @@ def train_model():
     model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
               validation_data=(x_test, y_test),
               callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,
-                         early_stopping_baseline_NAN]
+                         early_stopping_baseline_NAN ]
               )
     #
     #evaluate_model(model, x_test, y_test, scaler)
