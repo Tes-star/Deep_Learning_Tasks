@@ -292,13 +292,7 @@ def train_model():
         restore_best_weights=True,
         baseline=baseline4
     )
-    early_stopping_baseline_NAN = EarlyStopping(
-        monitor='val_mean_squared_error',
-        min_delta=-100,  # minimium amount of change to count as an improvement
-        patience=2,  # how many epochs to wait before stopping
-        restore_best_weights=True,
-        baseline=200
-    )
+    TerminateOnNaN = keras.callbacks.TerminateOnNaN()
 
     x_train = tf.convert_to_tensor(x_train)
     y_train = tf.convert_to_tensor(y_train)
@@ -327,7 +321,7 @@ def train_model():
     model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
               validation_data=(x_test, y_test),
               callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,
-                         early_stopping_baseline_NAN]
+                         TerminateOnNaN]
               )
     #
     #evaluate_model(model, x_test, y_test, scaler)
