@@ -397,7 +397,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'zjxgw1ev'
+    sweep_id = 'm8hvlv5l'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
