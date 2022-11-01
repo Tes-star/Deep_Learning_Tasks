@@ -219,13 +219,25 @@ def train_model():
             baseline1 = 100
             baseline2 = 40
             baseline3 = 15
-            baseline4 = 11
+            baseline4 = 12
         case 'MinMaxScaler':
             scaler = MinMaxScaler()
             baseline1 = 0.035
             baseline2 = 0.015
             baseline3 = 0.013
             baseline4 = 0.013
+
+    shape=x_train.shape
+
+    scaler.fit_transform(x_train.reshape(-1, 1))
+
+    x_train = scaler.transform(x_train.reshape(-1, 1))
+    x_train = x_train.reshape(shape)
+
+    shape = x_test.shape
+    x_test = scaler.transform(x_test.reshape(-1, 1))
+    x_test = x_test.reshape(shape)
+
     match config.activation_lstm_loop:
         case 'selu':
             activation_lstm_loop = selu
@@ -304,7 +316,6 @@ def train_model():
         data_proportion = 0.5
         batch_size=5000
 
-        callbacks.append()
         baseline1 = 20
         baseline2 = 11
         early_stopping_baseline_sonder = EarlyStopping(
@@ -314,7 +325,7 @@ def train_model():
             restore_best_weights=True,
             baseline=12
         )
-        callbacks.append(early_stopping_baseline_sonder)
+        #callbacks.append(early_stopping_baseline_sonder)
 
     dataset_size = int(x_train.shape[0] * data_proportion)
     wandb.log({'dataset_size': dataset_size})
@@ -327,14 +338,14 @@ def train_model():
     early_stopping = EarlyStopping(
         monitor='val_mean_squared_error',
         min_delta=0.00,  # minimium amount of change to count as an improvement
-        patience=10,  # how many epochs to wait before stopping
+        patience=20,  # how many epochs to wait before stopping
         restore_best_weights=True,
     )
     callbacks.append(early_stopping)
     early_stopping_baseline1 = EarlyStopping(
         monitor='val_mean_squared_error',
         min_delta=0,  # minimium amount of change to count as an improvement
-        patience=10,  # how many epochs to wait before stopping
+        patience=20,  # how many epochs to wait before stopping
         restore_best_weights=True,
         baseline=baseline1
     )
@@ -371,7 +382,7 @@ def train_model():
               validation_data=(x_test, y_test),
               callbacks=callbacks)
     #
-    # evaluate_model(model, x_test, y_test, scaler)
+    #evaluate_model(model, x_test, y_test, scaler)
 
     print("Finshed Job")
     wandb.finish()
@@ -387,7 +398,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'kf9t04tq'
+    sweep_id = 'smqn5wq6'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
