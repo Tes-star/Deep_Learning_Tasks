@@ -294,7 +294,7 @@ def train_model():
     )
     early_stopping_baseline_NAN = EarlyStopping(
         monitor='val_mean_squared_error',
-        min_delta=-1,  # minimium amount of change to count as an improvement
+        min_delta=-100,  # minimium amount of change to count as an improvement
         patience=2,  # how many epochs to wait before stopping
         restore_best_weights=True,
         baseline=200
