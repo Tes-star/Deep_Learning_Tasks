@@ -24,6 +24,8 @@ from keras.layers import Dense, Input, Flatten, Dropout, Embedding, LSTM, Bidire
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
+from sharedtask02.Model.model_iRNN import evaluate_model
+
 
 def load_data():
     train = pd.read_csv('../data/01_train/train.csv', header=None)
@@ -32,7 +34,7 @@ def load_data():
     return train, sampleTest, sampleSubmission
 
 
-def create_traindataset(data, reduce):
+def create_traindataset(data, ):
     x_train = []
     y_train = []
     x_test = []
@@ -43,10 +45,8 @@ def create_traindataset(data, reduce):
     wandb.log({'random_state': 12345})
 
     data = data.sample(frac=1, random_state=12345).reset_index(drop=True)
-    train = data.to_numpy()[:14]  #
+    train = data.to_numpy()[:14]
     test = data.to_numpy()[14:]
-    wandb.log({'random_state': train.shape})
-    wandb.log({'random_state': test.shape})
 
     for j in range(0, len(train)):
         for i in range(0, len(train[j]) - n_past - n_future + 1):
@@ -59,19 +59,19 @@ def create_traindataset(data, reduce):
             y_test.append(test[j, i + n_past: i + n_past + n_future])
 
     def reduce_data(data):
-        data_return = []
+        data_return=[]
         for x in data:
-            datapoint = np.zeros(30)
+            datapoint=np.zeros(30)
             for week in range(10):
-                datapoint[week] = mean(x[week * 7:week * 7 + 6])
-            for last_days in range(1, 21):
-                datapoint[9 + last_days] = x[69 + last_days]
+                datapoint[week]=mean(x[week*7:week*7+6])
+            for last_days in range(1,21):
+                datapoint[9+last_days]=x[69+last_days]
             data_return.append(datapoint)
         return data_return
 
-    if (reduce == 'TRUE'):
-        x_train = reduce_data(x_train)
-        x_test = reduce_data(x_test)
+    x_train=reduce_data(x_train)
+    x_test=reduce_data(x_test)
+
 
     x_train = np.expand_dims(np.array(x_train), axis=-1)
     y_train = np.expand_dims(np.array(y_train), axis=-1)
@@ -109,38 +109,15 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loo
                                        activation=activation_lstm_classifier)
     # model = Sequential()
     input = Input(shape=(x_train.shape[1], 1))
-    norm1 = BatchNormalization()(input)
 
-    irnn = component_loop(norm1)
-
-    if end_dense == 'TRUE':
-        norm2 = BatchNormalization()(irnn)
-        drop3 = Dropout(dropout_rate)(norm2)
-        dens = Dense(units=lstm_units, activation=activation_lstm_loop,
-                     kernel_initializer=activation_lstm_loop_init)(drop3)
-        norm3 = BatchNormalization()(dens)
-        drop4 = Dropout(dropout_rate)(norm3)
-    else:
-        norm2 = BatchNormalization()(irnn)
-        drop4 = Dropout(dropout_rate)(norm2)
+    irnn = component_loop(input)
 
     output = Dense(units=7, activation=activation_lstm_classifier, kernel_initializer=activation_lstm_classifier_init)(
-        drop4)
+        irnn)
 
     model = keras.Model(input, output)
     # model.summary()
     return model
-
-
-def evaluate_model(model, x_test, y_test, x_train, y_train, scaler):
-    x = tf.concat([x_train, x_test], 0)
-    y_pred = model.predict(x)
-    # y_pred= tf.convert_to_tensor(np.expand_dims(y_pred, axis=-1))
-
-    y = tf.concat([y_train, y_test], 0)
-
-    mse = mean_squared_error(y_pred, np.squeeze(y.numpy()))
-    wandb.log({'mse_dataset': mse})
 
 
 def train_model():
@@ -150,7 +127,7 @@ def train_model():
     # Access all hyperparameter values through wandb.config
     config = wandb.config
     train, sampleTest, sampleSubmission = load_data()
-    x_train, y_train, x_test, y_test = create_traindataset(data=train, reduce=config.reduce)
+    x_train, y_train, x_test, y_test = create_traindataset(data=train)
 
     # initiate the k-fold class from model_selection module
     splits = 2
@@ -208,9 +185,9 @@ def train_model():
             # baseline4 = 0.2
 
             # if no scaler
-            baseline1 = 30
-            baseline2 = 13
-            baseline3 = 12
+            baseline1 = 100
+            baseline2 = 40
+            baseline3 = 15
             baseline4 = 11
         case 'MinMaxScaler':
             scaler = MinMaxScaler()
@@ -272,7 +249,7 @@ def train_model():
 
     dataset_size = int(x_train.shape[0] * config.data_proportion)
     wandb.log({'dataset_size': dataset_size})
-    if dataset_size > 0 and config.reduce == 'False':
+    if dataset_size > 0:
         x_train = x_train[:dataset_size]
         y_train = y_train[:dataset_size]
         x_test = x_test[:dataset_size]
@@ -338,9 +315,9 @@ def train_model():
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
 
-    model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
+    model.fit(x_train, y_train, epochs=1, batch_size=config.batch_size, verbose=1,
               validation_data=(x_test, y_test),
-              callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,early_stopping_baseline3,early_stopping_baseline4,
+              callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,
                          TerminateOnNaN]
               )
     #
@@ -360,8 +337,22 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'j0ig0vlx'
-    # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
+    sweep_id = 'lmtxsz9m'
+    # ls=[]
+    # ls2=[]
+    # ls.append(np.random.rand(90)*100)
+    # ls.append(np.random.rand(90))
+    # for x in ls:
+    #     datapoint=np.zeros(30)
+    #     for week in range(10):
+    #         datapoint[week]=mean(x[week*7:week*7+6])
+    #     for last_days in range(1,21):
+    #         datapoint[9+last_days]=x[69+last_days]
+    #     ls2.append(datapoint)
+    #
+    # print('')
+
+    #sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
                 entity="deep_learning_hsa")
