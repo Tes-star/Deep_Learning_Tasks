@@ -93,22 +93,22 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loo
                                       activation='relu')
         case 'iGRU':
             component_loop = GRU(units=lstm_units,
-                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                       recurrent_initializer=initializers.Identity(gain=1.0),
-                                       activation='relu', return_sequences=True)
+                                 kernel_initializer=initializers.RandomNormal(stddev=0.001),
+                                 recurrent_initializer=initializers.Identity(gain=1.0),
+                                 activation='relu', return_sequences=True)
             component_end = GRU(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
+                                kernel_initializer=initializers.RandomNormal(stddev=0.001),
+                                recurrent_initializer=initializers.Identity(gain=1.0),
+                                activation='relu')
         case 'iLSTM':
             component_loop = LSTM(units=lstm_units,
-                                       kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                       recurrent_initializer=initializers.Identity(gain=1.0),
-                                       activation='relu', return_sequences=True)
+                                  kernel_initializer=initializers.RandomNormal(stddev=0.001),
+                                  recurrent_initializer=initializers.Identity(gain=1.0),
+                                  activation='relu', return_sequences=True)
             component_end = LSTM(units=lstm_units,
-                                      kernel_initializer=initializers.RandomNormal(stddev=0.001),
-                                      recurrent_initializer=initializers.Identity(gain=1.0),
-                                      activation='relu')
+                                 kernel_initializer=initializers.RandomNormal(stddev=0.001),
+                                 recurrent_initializer=initializers.Identity(gain=1.0),
+                                 activation='relu')
 
     model = Sequential()
     model.add(Input(shape=(x_train.shape[1], 1)))
@@ -183,7 +183,7 @@ def train_model():
     # for fold, (trn_, val_) in enumerate(kf.split(X=x_train)):
     # set wandb configs
 
-    batch_size=config.batch_size
+    batch_size = config.batch_size
     # set configs
 
     # neurons = config.neurons
@@ -227,7 +227,7 @@ def train_model():
             baseline3 = 0.013
             baseline4 = 0.013
 
-    shape=x_train.shape
+    shape = x_train.shape
 
     scaler.fit_transform(x_train.reshape(-1, 1))
 
@@ -307,7 +307,7 @@ def train_model():
                        batch_normalisation=config.batch_normalisation
                        )
     print(y_test.shape)
-    callbacks=[]
+    callbacks = []
 
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
@@ -381,7 +381,7 @@ def train_model():
               validation_data=(x_test, y_test),
               callbacks=callbacks)
     #
-    #evaluate_model(model, x_test, y_test, scaler)
+    # evaluate_model(model, x_test, y_test, scaler)
 
     print("Finshed Job")
     wandb.finish()

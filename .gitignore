@@ -1,2 +1,5 @@
 /.idea/
 /sharedtask01/wandb/
+/sharedtask03/data/01_train/test/
+/sharedtask03/data/01_train/train/
+/sharedtask03/data/01_train/val/
