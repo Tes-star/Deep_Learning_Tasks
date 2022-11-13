@@ -4,6 +4,7 @@ from keras.backend import random_normal
 from keras.callbacks import EarlyStopping
 from keras.optimizers import Adam
 from keras.regularizers import l2
+from keras.utils.layer_utils import count_params
 from wandb.integration.keras import WandbCallback
 
 import wandb
@@ -15,8 +16,7 @@ from keras.layers import BatchNormalization, SpatialDropout2D, Activation, Conca
 from keras.layers import Dropout
 
 
-# or from tensorflow import keras
-
+# train_ds = train_ds_org.map(lambda x, y: (rand_augment(x), y))
 # keras.backend.set_image_data_format('channels_last')
 def get_data(config):
     path = '../data/01_train/train/'
@@ -36,7 +36,7 @@ def get_data(config):
                                                        seed=1234,
                                                        labels='inferred',
                                                        label_mode='categorical',
-                                                       batch_size=10000)
+                                                       batch_size=32)
     return train_ds, test_ds
 
 
@@ -45,14 +45,6 @@ def get_model(config):
         image = tf.cast(image, tf.float32)
         image = (image / 255.0)
         return image
-
-    rand_augment = keras_cv.layers.RandAugment(
-        value_range=(0, 255),
-        augmentations_per_image=3,
-        magnitude=0.3,
-        magnitude_stddev=0.2,
-        rate=0.5,
-    )
 
     ###################################################################################################################
     dropout = config.dropout_rate
@@ -66,7 +58,7 @@ def get_model(config):
 
     unit_list = []
     for i in range(block_qty):
-        unit_list.append(1 ** i * cnn_unit)
+        unit_list.append(cnn_unit)
     wandb.log({'unit_list': unit_list})
 
     wt_decay = 0.001
@@ -74,7 +66,7 @@ def get_model(config):
 
     input = keras.Input((32, 32, 3))
     x = input
-    #x = rand_augment(x)
+    # x = rand_augment(x)
     x = rescale(x)
 
     # first layer
@@ -108,6 +100,8 @@ def get_model(config):
     # build and compile model
     model = keras.Model(input, output)
     model.summary()
+    print('weights: ' + str(count_params(model.trainable_weights)))
+    wandb.log({'weights': count_params(model.trainable_weights)})
     return model
 
 
@@ -117,24 +111,23 @@ def train_model():
     wandb.init(reinit=True)
     config = wandb.config
 
-    match config.optimizer:
-        case 'Adam':
-            optimizer = tf.keras.optimizers.Adam(learning_rate=config.learning_rate)
-            # lr=0.001,decay=0, beta_1=0.9, beta_2=0.999, epsilon=1e-08
-        case 'SGD':
-            optimizer = tf.keras.optimizers.SGD(learning_rate=config.learning_rate)
-        case 'RMSprop':
-            optimizer = tf.keras.optimizers.RMSprop(learning_rate=config.learning_rate)
-        case 'Adadelta':
-            optimizer = tf.keras.optimizers.Adadelta(learning_rate=config.learning_rate)
-        case 'Adamax':
-            optimizer = tf.keras.optimizers.Adamax(learning_rate=config.learning_rate)
-        case 'Nadam':
-            optimizer = tf.keras.optimizers.Nadam(learning_rate=config.learning_rate)
-        case 'Adagrad':
-            optimizer = tf.keras.optimizers.Adagrad(learning_rate=config.learning_rate)
-        case 'Ftrl':
-            optimizer = tf.keras.optimizers.Ftrl(learning_rate=config.learning_rate)
+    if config.optimizer == 'Adam':
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config.learning_rate)
+        # lr=0.001,decay=0, beta_1=0.9, beta_2=0.999, epsilon=1e-08
+    if config.optimizer == 'SGD':
+        optimizer = tf.keras.optimizers.SGD(learning_rate=config.learning_rate)
+    if config.optimizer == 'RMSprop':
+        optimizer = tf.keras.optimizers.RMSprop(learning_rate=config.learning_rate)
+    if config.optimizer == 'Adadelta':
+        optimizer = tf.keras.optimizers.Adadelta(learning_rate=config.learning_rate)
+    if config.optimizer == 'Adamax':
+        optimizer = tf.keras.optimizers.Adamax(learning_rate=config.learning_rate)
+    if config.optimizer == 'Nadam':
+        optimizer = tf.keras.optimizers.Nadam(learning_rate=config.learning_rate)
+    if config.optimizer == 'Adagrad':
+        optimizer = tf.keras.optimizers.Adagrad(learning_rate=config.learning_rate)
+    if config.optimizer == 'Ftrl':
+        optimizer = tf.keras.optimizers.Ftrl(learning_rate=config.learning_rate)
 
     train_ds, test_ds = get_data(config)
     model = get_model(config)
@@ -142,9 +135,8 @@ def train_model():
 
     # callbacks
 
-    callbacks = []  #
+    callbacks = [WandbCallback()]  #
 
-    callbacks.append(WandbCallback())
     patience = 3
     wandb.log({'patience': patience})
 
@@ -155,7 +147,29 @@ def train_model():
         restore_best_weights=True,
     )
     callbacks.append(early_stopping)
-    # wandb.log({'early_stopping': early_stopping})
+
+    autotune = tf.data.experimental.AUTOTUNE
+    train_ds = train_ds.cache().shuffle(10000).prefetch(buffer_size=autotune)
+
+    # Augmentation
+
+    wandb.log({'Augmentation': True})
+
+    rand_augment = keras_cv.layers.RandAugment(
+        value_range=(0, 255),
+        augmentations_per_image=100,
+        magnitude=1,
+        rate=1
+    )
+    cut_mix = keras_cv.layers.CutMix()
+    mix_up = keras_cv.layers.MixUp()
+
+    def cut_mix_and_mix_up(samples):
+        samples = cut_mix(samples, training=True)
+        samples = mix_up(samples, training=True)
+        return samples
+
+    train_ds = train_ds.map(lambda x, y: (rand_augment(x), y))
 
     model.compile(loss=tf.keras.losses.CategoricalCrossentropy(), metrics=['categorical_accuracy'],
                   optimizer=optimizer)
@@ -170,8 +184,9 @@ def train_model():
 
 if __name__ == '__main__':
     # define sweep_id
-    sweep_id = 'r3qma8ub'
+    sweep_id = '3gmj14x6'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
+
     wandb.agent(sweep_id, function=train_model, project="Abgabe_03",
                 entity="deep_learning_hsa")
