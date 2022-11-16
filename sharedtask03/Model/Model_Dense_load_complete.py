@@ -1,10 +1,12 @@
 import keras_cv
+from imgaug import augmenters as iaa
 import numpy as np
 from keras.backend import random_normal
 from keras.callbacks import EarlyStopping
 from keras.optimizers import Adam
 from keras.regularizers import l2
 from keras.utils.layer_utils import count_params
+from sklearn.utils import shuffle
 from wandb.integration.keras import WandbCallback
 
 import wandb
@@ -15,29 +17,7 @@ import keras
 from keras.layers import BatchNormalization, SpatialDropout2D, Activation, Concatenate
 from keras.layers import Dropout
 
-
-# train_ds = train_ds_org.map(lambda x, y: (rand_augment(x), y))
-# keras.backend.set_image_data_format('channels_last')
-def get_data(config):
-    path = '../data/01_train/train/'
-
-    train_ds = keras.utils.image_dataset_from_directory(path,
-                                                        image_size=(32, 32),
-                                                        color_mode='rgb',
-                                                        seed=1234,
-                                                        labels='inferred',
-                                                        label_mode='categorical',
-                                                        batch_size=32)
-
-    path = '../data/01_train/val/'
-    test_ds = keras.utils.image_dataset_from_directory(path,
-                                                       image_size=(32, 32),
-                                                       color_mode='rgb',
-                                                       seed=1234,
-                                                       labels='inferred',
-                                                       label_mode='categorical',
-                                                       batch_size=32)
-    return train_ds, test_ds
+from sharedtask03.Model.helper import import_images
 
 
 def get_model(config):
@@ -61,12 +41,10 @@ def get_model(config):
         unit_list.append(cnn_unit)
     wandb.log({'unit_list': unit_list})
 
-    wt_decay = 0.001
     ###################################################################################################################
 
     input = keras.Input((32, 32, 3))
     x = input
-    # x = rand_augment(x)
     x = rescale(x)
 
     # first layer
@@ -108,7 +86,7 @@ def get_model(config):
 def train_model():
     print("Run start.")
 
-    wandb.init(reinit=True)
+    wandb.init(dir="C:\\temp")
     config = wandb.config
 
     if config.optimizer == 'Adam':
@@ -129,64 +107,83 @@ def train_model():
     if config.optimizer == 'Ftrl':
         optimizer = tf.keras.optimizers.Ftrl(learning_rate=config.learning_rate)
 
-    train_ds, test_ds = get_data(config)
-    model = get_model(config)
-    print('Number of training batches: %d' % tf.data.experimental.cardinality(train_ds).numpy())
+    # train_ds, test_ds = get_data(config)
 
-    # callbacks
+    # import data
+
+    y_train, x_train = import_images(path='../data/01_train/train/')
+    y_test, x_test = import_images(path='../data/01_train/val/')
+
+    x_train, y_train = shuffle(x_train, y_train, random_state=0)
+    x_test, y_test = shuffle(x_test, y_test, random_state=0)
+
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
+
+    # Augmentation
+    wandb.log({'Augmentation': True})
+
+    AUTO = tf.data.AUTOTUNE
+    BATCH_SIZE = config.batch_size
+    EPOCHS = 1
+    IMAGE_SIZE = 32
+    rand_aug = iaa.RandAugment(n=config.augmentations_per_image, m=config.magnitude)
+    #rand_aug = iaa.RandAugment(n=0, m=0)
+
+    def augment(images):
+        # Input to `augment()` is a TensorFlow tensor which
+        # is not supported by `imgaug`. This is why we first
+        # convert it to its `numpy` variant.
+        images = tf.cast(images, tf.uint8)
+        return rand_aug(images=images.numpy())
+
+    # create dataholder
+    train_ds = (
+        tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        .shuffle(BATCH_SIZE * 100)
+        .batch(BATCH_SIZE)
+        .map(
+            lambda x, y: (tf.py_function(augment, [x], [tf.float32])[0], y),
+            num_parallel_calls=AUTO,
+        )
+        .prefetch(AUTO)
+    )
+
+    test_ds = (
+        tf.data.Dataset.from_tensor_slices((x_test, y_test))
+        .batch(BATCH_SIZE)
+        .prefetch(AUTO)
+    )
+
+    model = get_model(config)
 
     callbacks = [WandbCallback()]  #
 
-    patience = 3
+    patience = 5
     wandb.log({'patience': patience})
 
     early_stopping = EarlyStopping(
         monitor='val_categorical_accuracy',
         min_delta=0.000,  # minimium amount of change to count as an improvement
         patience=patience,  # how many epochs to wait before stopping
-        restore_best_weights=True,
+        restore_best_weights=False,
     )
     callbacks.append(early_stopping)
 
-    # autotune = tf.data.experimental.AUTOTUNE
-    # train_ds = train_ds.cache().shuffle(10000).prefetch(buffer_size=autotune)
-
-    # Augmentation
-
-    wandb.log({'Augmentation': True})
-
-    cut_mix = keras_cv.layers.CutMix()
-    mix_up = keras_cv.layers.MixUp()
-
-    def cut_mix_and_mix_up(samples):
-        samples = cut_mix(samples, training=True)
-        samples = mix_up(samples, training=True)
-        return samples
-
-    rand_augment = keras_cv.layers.RandAugment(
-        value_range=(0, 255),
-        augmentations_per_image=100,
-        magnitude=1,
-        rate=1
-    )
-    # train_ds = train_ds.map(lambda x, y: (rand_augment(x), y))
-
     model.compile(loss=tf.keras.losses.CategoricalCrossentropy(), metrics=['categorical_accuracy'],
                   optimizer=optimizer)
-    try:
-        model.fit(train_ds, epochs=1000, shuffle=True,
-                  validation_data=test_ds,
-                  callbacks=callbacks
-                  )
-    except:
-        print("Error")
+
+    model.fit(train_ds, epochs=1000, shuffle=True,
+              validation_data=test_ds,
+              callbacks=callbacks
+              )
     print("Run ended successful!")
     print()
 
 
 if __name__ == '__main__':
     # define sweep_id
-    sweep_id = '7v7z8iec'
+    sweep_id = 'cr28g6pk'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
 
