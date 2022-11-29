@@ -11,7 +11,7 @@ train_ds = keras.utils.image_dataset_from_directory(path,
                                                     color_mode='rgb',
                                                     labels='inferred',
                                                     label_mode='categorical',
-                                                    batch_size=2000)
+                                                    batch_size=32)
 
 path = '../data/01_train/val/'
 test_ds = keras.utils.image_dataset_from_directory(path,
@@ -19,7 +19,7 @@ test_ds = keras.utils.image_dataset_from_directory(path,
                                                    color_mode='rgb',
                                                    labels='inferred',
                                                    label_mode='categorical',
-                                                   batch_size=10000)
+                                                   batch_size=32)
 
 
 def get_model():
@@ -29,36 +29,36 @@ def get_model():
     # expanded_input=tf.expand_dims(input, axis=-1)
 
     # Block 1: (None, 28, 28, 1) -> (None, 14, 14, 4)
-    conv_1 = keras.layers.Conv2D(filters=32, kernel_size=3, padding='same')(input)
+    conv_1 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same')(input)
     batch_1 = BatchNormalization()(conv_1)
-    conv_2 = keras.layers.Conv2D(filters=32, kernel_size=3, padding='same')(batch_1)
+    conv_2 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same')(batch_1)
     max_pool_1 = keras.layers.MaxPool2D()(conv_2)
-    up_1 = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same')(max_pool_1)
+    up_1 = keras.layers.Conv2D(filters=256, kernel_size=3, padding='same')(max_pool_1)
     batch_2= BatchNormalization()(up_1)
 
     # Block 2: (None, 14, 14, 4) -> (None, 7, 7, 4)
 
-    conv_3 = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same')(batch_2)
-    conv_4 = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same')(conv_3)
+    conv_3 = keras.layers.Conv2D(filters=256, kernel_size=3, padding='same')(batch_2)
+    conv_4 = keras.layers.Conv2D(filters=256, kernel_size=3, padding='same')(conv_3)
     # Residual connection
     res_1 = keras.layers.Add()([batch_2, conv_4])
     max_pool_2 = keras.layers.MaxPool2D()(res_1)
-    up_2 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same')(max_pool_2)
+    up_2 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same')(max_pool_2)
     batch_2= BatchNormalization()(up_2)
 
     # Block 3: (None, 7, 7, 4) -> (None, 7, 7, 4)
-    conv_5 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same')(batch_2)
-    conv_6 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same')(conv_5)
+    conv_5 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same')(batch_2)
+    conv_6 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same')(conv_5)
     # Residual connection
     res_2 = keras.layers.Add()([batch_2, conv_6])
     batch_3 = BatchNormalization()(res_2)
 
     # (None, 7, 7, 4) -> (None, 5, 5, 8)
-    conv_7 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same' )(batch_3)
+    conv_7 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same' )(batch_3)
     # (None, 5, 5, 8) -> (None, 3, 3, 16)
-    conv_8 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same'  )(conv_7)
+    conv_8 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same'  )(conv_7)
     # (None, 3, 3, 16) -> (None, 1, 1, 16)
-    conv_9 = keras.layers.Conv2D(filters=128, kernel_size=3, padding='same' )(conv_8)
+    conv_9 = keras.layers.Conv2D(filters=512, kernel_size=3, padding='same' )(conv_8)
     res_3 = keras.layers.Add()([batch_2, conv_9])
     batch_4 = BatchNormalization()(res_3)
 
