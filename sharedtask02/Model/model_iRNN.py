@@ -5,6 +5,7 @@ from keras import Sequential, initializers
 from keras.activations import sigmoid, tanh, elu, selu, relu
 from keras.initializers.initializers_v2 import GlorotNormal, HeNormal
 from keras.utils import to_categorical
+from numpy import mean
 from sklearn import model_selection
 from keras.callbacks import EarlyStopping
 from keras.losses import CategoricalCrossentropy
@@ -31,7 +32,7 @@ def load_data():
     return train, sampleTest, sampleSubmission
 
 
-def create_traindataset(data, ):
+def create_traindataset(data, reduce):
     x_train = []
     y_train = []
     x_test = []
@@ -39,9 +40,13 @@ def create_traindataset(data, ):
     n_future = 7  # next 4 days temperature forecast
     n_past = 90  # Past 90 days
 
-    data = data.sample(frac=1, random_state=1234).reset_index(drop=True)
-    train = data.to_numpy()[:14]
+    wandb.log({'random_state': 12345})
+
+    data = data.sample(frac=1, random_state=12345).reset_index(drop=True)
+    train = data.to_numpy()[:14]  #
     test = data.to_numpy()[14:]
+    wandb.log({'random_state': train.shape})
+    wandb.log({'random_state': test.shape})
 
     for j in range(0, len(train)):
         for i in range(0, len(train[j]) - n_past - n_future + 1):
@@ -52,6 +57,21 @@ def create_traindataset(data, ):
         for i in range(0, len(test[j]) - n_past - n_future + 1):
             x_test.append(test[j, i: i + n_past])
             y_test.append(test[j, i + n_past: i + n_past + n_future])
+
+    def reduce_data(data):
+        data_return = []
+        for x in data:
+            datapoint = np.zeros(30)
+            for week in range(10):
+                datapoint[week] = mean(x[week * 7:week * 7 + 6])
+            for last_days in range(1, 21):
+                datapoint[9 + last_days] = x[69 + last_days]
+            data_return.append(datapoint)
+        return data_return
+
+    if (reduce == 'TRUE'):
+        x_train = reduce_data(x_train)
+        x_test = reduce_data(x_test)
 
     x_train = np.expand_dims(np.array(x_train), axis=-1)
     y_train = np.expand_dims(np.array(y_train), axis=-1)
@@ -112,22 +132,15 @@ def load_model(x_train, lstm_units, lstm_size, dropout_rate, activation_lstm_loo
     return model
 
 
-def evaluate_model(model, x_test, y_test, scaler):
-    y_pred = model.predict(x_test)
-    y_test=y_test.numpy().reshape(y_pred.shape)
-    print('x_test :')
-    print(x_test[:10])
-    print('y_pred :')
-    print(y_pred[:10])
-    print('y_test :')
-    print(y_test[:10])
+def evaluate_model(model, x_test, y_test, x_train, y_train, scaler):
+    x = tf.concat([x_train, x_test], 0)
+    y_pred = model.predict(x)
+    # y_pred= tf.convert_to_tensor(np.expand_dims(y_pred, axis=-1))
 
-    print('dif')
-    print(y_test-y_pred)
+    y = tf.concat([y_train, y_test], 0)
 
-
-    mse = mean_squared_error(y_pred, y_test)
-    wandb.log({'mse_real': mse})
+    mse = mean_squared_error(y_pred, np.squeeze(y.numpy()))
+    wandb.log({'mse_dataset': mse})
 
 
 def train_model():
@@ -137,7 +150,7 @@ def train_model():
     # Access all hyperparameter values through wandb.config
     config = wandb.config
     train, sampleTest, sampleSubmission = load_data()
-    x_train, y_train, x_test, y_test = create_traindataset(data=train)
+    x_train, y_train, x_test, y_test = create_traindataset(data=train, reduce=config.reduce)
 
     # initiate the k-fold class from model_selection module
     splits = 2
@@ -169,17 +182,35 @@ def train_model():
 
     # Scale Data
     match config.scaler:
+        case 'None':
+            scaler = None
+
+            # if no scaler
+            baseline1 = 100
+            baseline2 = 40
+            baseline3 = 15
+            baseline4 = 11
         case 'StandardScaler':
             scaler = StandardScaler()
+            shape = x_train.shape
+
+            scaler.fit_transform(x_train.reshape(-1, 1))
+
+            x_train = scaler.transform(x_train.reshape(-1, 1))
+            x_train = x_train.reshape(shape)
+
+            shape = x_test.shape
+            x_test = scaler.transform(x_test.reshape(-1, 1))
+            x_test = x_test.reshape(shape)
             # baseline1 = 1
             # baseline2 = 0.8
             # baseline3 = 0.5
             # baseline4 = 0.2
 
             # if no scaler
-            baseline1 = 100
-            baseline2 = 40
-            baseline3 = 15
+            baseline1 = 30
+            baseline2 = 13
+            baseline3 = 12
             baseline4 = 11
         case 'MinMaxScaler':
             scaler = MinMaxScaler()
@@ -187,17 +218,6 @@ def train_model():
             baseline2 = 0.015
             baseline3 = 0.013
             baseline4 = 0.013
-
-    shape = x_train.shape
-
-    scaler.fit_transform(x_train.reshape(-1, 1))
-
-    x_train = scaler.transform(x_train.reshape(-1, 1))
-    x_train = x_train.reshape(shape)
-
-    shape = x_test.shape
-    x_test = scaler.transform(x_test.reshape(-1, 1))
-    x_test = x_test.reshape(shape)
 
     match config.activation_lstm_loop:
         case 'selu':
@@ -252,7 +272,7 @@ def train_model():
 
     dataset_size = int(x_train.shape[0] * config.data_proportion)
     wandb.log({'dataset_size': dataset_size})
-    if dataset_size > 0:
+    if dataset_size > 0 and config.reduce == 'False':
         x_train = x_train[:dataset_size]
         y_train = y_train[:dataset_size]
         x_test = x_test[:dataset_size]
@@ -320,11 +340,11 @@ def train_model():
 
     model.fit(x_train, y_train, epochs=1000, batch_size=config.batch_size, verbose=1,
               validation_data=(x_test, y_test),
-              callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,
+              callbacks=[WandbCallback(), early_stopping, early_stopping_baseline1, early_stopping_baseline2,early_stopping_baseline3,early_stopping_baseline4,
                          TerminateOnNaN]
               )
     #
-    #evaluate_model(model, x_test, y_test, scaler)
+    evaluate_model(model, x_test, y_test, x_train, y_train, scaler)
 
     print("Finshed Job")
     wandb.finish()
@@ -340,7 +360,7 @@ if __name__ == '__main__':
     # load data
 
     # define sweep_id
-    sweep_id = 'tl44rwzz'
+    sweep_id = 'j0ig0vlx'
     # sweep_id = wandb.sweep(sweep=sweep_configuration, project='Abgabe_02', entity="deep_learning_hsa")
     # run the sweep
     wandb.agent(sweep_id, function=train_model, project="Abgabe_02",
